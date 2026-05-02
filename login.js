@@ -87,6 +87,11 @@ function setMode(nextMode) {
   setMessage("");
 }
 
+function syncModeUrl() {
+  const url = mode === "signup" ? "./login.html?mode=signup" : "./login.html";
+  window.history.replaceState({}, document.title, url);
+}
+
 function getSignupProfile() {
   const firstName = authName.value.trim();
   const lastName = authLastName.value.trim();
@@ -180,6 +185,10 @@ function startVerificationWatcher(user) {
 function applyInitialMessage() {
   const params = new URLSearchParams(window.location.search);
 
+  if (params.get("mode") === "signup") {
+    setMode("signup");
+  }
+
   if (params.get("verified") === "1") {
     setMode("login");
     setMessage("E-mail confirmado. Agora entre com seu e-mail e senha.");
@@ -187,8 +196,15 @@ function applyInitialMessage() {
   }
 }
 
-loginTab.addEventListener("click", () => setMode("login"));
-signupTab.addEventListener("click", () => setMode("signup"));
+loginTab.addEventListener("click", () => {
+  setMode("login");
+  syncModeUrl();
+});
+
+signupTab.addEventListener("click", () => {
+  setMode("signup");
+  syncModeUrl();
+});
 
 document.querySelectorAll(".password-toggle").forEach((button) => {
   button.addEventListener("click", () => {
@@ -293,7 +309,7 @@ resendVerificationButton.addEventListener("click", async () => {
 });
 
 onAuthStateChanged(auth, (user) => {
-  if (user?.emailVerified && mode === "login") {
+  if (user?.emailVerified && mode === "login" && !new URLSearchParams(window.location.search).has("mode")) {
     window.location.href = "./index.html";
     return;
   }
