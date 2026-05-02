@@ -27,6 +27,7 @@ const authEmail = document.querySelector("#authEmail");
 const authPassword = document.querySelector("#authPassword");
 const authConfirmPassword = document.querySelector("#authConfirmPassword");
 const authBirthDate = document.querySelector("#authBirthDate");
+const passwordMatchMessage = document.querySelector("#passwordMatchMessage");
 const authSubmit = document.querySelector("#authSubmit");
 const authSubmitLabel = document.querySelector("#authSubmitLabel");
 const authMessage = document.querySelector("#authMessage");
@@ -84,6 +85,7 @@ function setMode(nextMode) {
   authSubmitLabel.textContent = isSignup ? "Criar conta" : "Entrar";
   authPassword.autocomplete = isSignup ? "new-password" : "current-password";
   resetPasswordButton.classList.toggle("hidden", isSignup);
+  updatePasswordMatchMessage();
   setMessage("");
 }
 
@@ -196,6 +198,30 @@ function applyInitialMessage() {
   }
 }
 
+function updatePasswordMatchMessage() {
+  if (mode !== "signup") {
+    passwordMatchMessage.textContent = "";
+    passwordMatchMessage.classList.remove("valid", "invalid");
+    return true;
+  }
+
+  const password = authPassword.value;
+  const confirmPassword = authConfirmPassword.value;
+
+  if (!password && !confirmPassword) {
+    passwordMatchMessage.textContent = "";
+    passwordMatchMessage.classList.remove("valid", "invalid");
+    return false;
+  }
+
+  const matches = password === confirmPassword;
+  passwordMatchMessage.textContent = matches ? "As senhas correspondem" : "As senhas n\u00e3o correspondem";
+  passwordMatchMessage.classList.toggle("valid", matches);
+  passwordMatchMessage.classList.toggle("invalid", !matches);
+
+  return matches;
+}
+
 loginTab.addEventListener("click", () => {
   setMode("login");
   syncModeUrl();
@@ -217,6 +243,10 @@ document.querySelectorAll(".password-toggle").forEach((button) => {
   });
 });
 
+[authPassword, authConfirmPassword].forEach((input) => {
+  input.addEventListener("input", updatePasswordMatchMessage);
+});
+
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
 
@@ -227,8 +257,8 @@ loginForm.addEventListener("submit", async (event) => {
 
   if (!email || !password || (mode === "signup" && (!profile.firstName || !profile.lastName || !profile.birthDate))) return;
 
-  if (mode === "signup" && password !== confirmPassword) {
-    setMessage("A confirmacao da senha precisa ser exatamente igual a senha.", true);
+  if (mode === "signup" && !updatePasswordMatchMessage()) {
+    authConfirmPassword.focus();
     return;
   }
 
