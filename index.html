@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Classificador de Experi&ecirc;ncias</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="top-bar">
+        <span class="user-chip hidden" id="userChip"></span>
+        <button class="settings-button hidden" id="settingsButton" type="button" aria-label="Abrir configura&ccedil;&otilde;es">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1A2 2 0 0 1 4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.3 7A2 2 0 0 1 7.1 4.2l.1.1a1.7 1.7 0 0 0 1.9.3h.1a1.7 1.7 0 0 0 1-1.6V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.6h.1a1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 0 1 20.2 7l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.6 1h.1a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.6 1Z"/></svg>
+        </button>
+        <button class="logout-button hidden" id="logoutButton" type="button">Sair</button>
+        <a class="login-link" id="loginLink" href="./login.html">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg>
+          Login
+        </a>
+      </header>
+
+      <section class="panel intro-panel" id="heroPanel" aria-labelledby="app-title">
+        <div class="hero-content">
+          <p class="eyebrow">Di&aacute;rio de experi&ecirc;ncias</p>
+          <textarea id="heroTitleInput" aria-label="T&iacute;tulo do painel">Classifique o que valeu a pena viver.</textarea>
+          <div class="hero-actions">
+            <button class="secondary-button" id="saveHeroButton" type="button">Salvar painel</button>
+            <label class="hero-photo-button">
+              <input id="heroPhotoInput" type="file" accept="image/*" />
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h3l2-3h6l2 3h3v13H4z"/><circle cx="12" cy="13" r="4"/></svg>
+              Foto
+            </label>
+            <button class="secondary-button hidden" id="removeHeroPhotoButton" type="button">Remover foto</button>
+          </div>
+        </div>
+
+        <div class="summary-grid" aria-label="Resumo das avalia&ccedil;&otilde;es">
+          <div>
+            <span id="totalCount">0</span>
+            <small>registros</small>
+          </div>
+          <div>
+            <span id="averageRating">0.0</span>
+            <small>m&eacute;dia</small>
+          </div>
+        </div>
+      </section>
+
+      <section class="locked-panel hidden" id="lockedPanel">
+        <h2>Acesse sua conta</h2>
+        <p>As experi&ecirc;ncias, fotos, categorias e altera&ccedil;&otilde;es s&oacute; aparecem quando voc&ecirc; estiver logado com uma conta confirmada.</p>
+        <a class="login-link" href="./login.html">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg>
+          Fazer login
+        </a>
+      </section>
+
+      <section class="workspace" aria-label="Cadastro de experi&ecirc;ncia">
+        <form class="rating-form" id="ratingForm">
+          <div class="form-heading">
+            <h2>Nova experi&ecirc;ncia</h2>
+            <button class="collapse-button" id="collapseFormButton" type="button" title="Encolher painel" aria-label="Encolher painel" aria-expanded="true" aria-controls="formBody">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m18 15-6-6-6 6"/></svg>
+            </button>
+          </div>
+
+          <div class="form-body" id="formBody">
+            <fieldset>
+              <legend>Tipo de experi&ecirc;ncia</legend>
+              <div class="type-grid" id="typeGrid">
+                <label class="type-option type-gastronomica">
+                  <input type="radio" name="experienceType" value="Gastron&ocirc;mica" checked />
+                  <span class="type-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M7 3v8M4 3v8M10 3v8M4 11h6M7 11v10M16 3v18M16 3c3 1 5 4 5 8 0 3-2 5-5 6"/></svg>
+                  </span>
+                  <span>Gastron&ocirc;mica</span>
+                </label>
+
+                <label class="type-option type-cinefila">
+                  <input type="radio" name="experienceType" value="Cin&eacute;fila" />
+                  <span class="type-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 5v14M16 5v14M4 9h4M4 15h4M16 9h4M16 15h4"/></svg>
+                  </span>
+                  <span>Cin&eacute;fila</span>
+                </label>
+
+                <label class="type-option type-passeio">
+                  <input type="radio" name="experienceType" value="Passeio" />
+                  <span class="type-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M5 20h14M7 17l5-13 5 13M9 12h6M8 17h8"/></svg>
+                  </span>
+                  <span>Passeio</span>
+                </label>
+
+                <label class="type-option type-cultural">
+                  <input type="radio" name="experienceType" value="Cultural" />
+                  <span class="type-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M4 20h16M6 17V9l6-4 6 4v8M9 17v-6M15 17v-6M4 9h16"/></svg>
+                  </span>
+                  <span>Cultural</span>
+                </label>
+              </div>
+            </fieldset>
+
+          <label class="field">
+            <span>Nome da experi&ecirc;ncia</span>
+            <input id="experienceName" type="text" placeholder="Ex: jantar no bairro, filme de sexta..." autocomplete="off" required />
+          </label>
+
+          <label class="field">
+            <span>Categoria</span>
+            <select id="experienceCategory" required></select>
+          </label>
+          <div class="custom-category hidden" id="customCategoryBox">
+            <input id="customCategoryInput" type="text" placeholder="Nova categoria" autocomplete="off" />
+            <button class="secondary-button" id="addCategoryButton" type="button">Adicionar</button>
+            <button class="danger-button hidden" id="deleteCategoryButton" type="button">Excluir categoria</button>
+          </div>
+
+          <label class="field">
+            <span>Data</span>
+            <input id="experienceDate" type="date" required />
+          </label>
+
+          <label class="field">
+            <span>Observa&ccedil;&otilde;es</span>
+            <textarea id="experienceNotes" placeholder="O que marcou essa experi&ecirc;ncia?"></textarea>
+          </label>
+
+          <div class="field photo-field">
+            <span>Fotos</span>
+            <label class="photo-picker">
+              <input id="experiencePhotos" type="file" accept="image/*" multiple />
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h3l2-3h6l2 3h3v13H4z"/><circle cx="12" cy="13" r="4"/></svg>
+              Adicionar fotos
+            </label>
+            <div class="photo-preview" id="photoPreview" aria-live="polite"></div>
+          </div>
+
+          <div class="star-block">
+            <span>Nota</span>
+            <div class="stars" id="starInput" role="radiogroup" aria-label="Nota em estrelas">
+              <button type="button" class="star active" data-rating="1" aria-label="1 estrela">&#9733;</button>
+              <button type="button" class="star active" data-rating="2" aria-label="2 estrelas">&#9733;</button>
+              <button type="button" class="star active" data-rating="3" aria-label="3 estrelas">&#9733;</button>
+              <button type="button" class="star active" data-rating="4" aria-label="4 estrelas">&#9733;</button>
+              <button type="button" class="star" data-rating="5" aria-label="5 estrelas">&#9733;</button>
+            </div>
+          </div>
+
+            <div class="form-actions">
+              <button class="submit-button" id="submitButton" type="submit">
+                <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                <span id="submitLabel">Registrar experi&ecirc;ncia</span>
+              </button>
+              <button class="secondary-button hidden" id="cancelEditButton" type="button">Cancelar edi&ccedil;&atilde;o</button>
+            </div>
+          </div>
+        </form>
+
+        <section class="list-panel" aria-labelledby="list-title">
+          <div class="list-heading">
+            <h2 id="list-title">Experi&ecirc;ncias classificadas</h2>
+            <button class="clear-button" id="clearButton" type="button" title="Selecionar experi&ecirc;ncias para deletar" aria-label="Selecionar experi&ecirc;ncias para deletar">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 14h10l1-14M9 7V4h6v3"/></svg>
+            </button>
+          </div>
+          <div class="filters" aria-label="Filtros das experi&ecirc;ncias">
+            <label class="filter-field">
+              <span>Buscar</span>
+              <input id="searchFilter" type="search" placeholder="Nome ou observa&ccedil;&atilde;o" />
+            </label>
+            <label class="filter-field">
+              <span>Tipo</span>
+              <select id="typeFilter">
+                <option value="">Todos</option>
+                <option value="Gastron&ocirc;mica">Gastron&ocirc;mica</option>
+                <option value="Cin&eacute;fila">Cin&eacute;fila</option>
+                <option value="Passeio">Passeio</option>
+                <option value="Cultural">Cultural</option>
+              </select>
+            </label>
+            <label class="filter-field">
+              <span>Categoria</span>
+              <select id="categoryFilter">
+                <option value="">Todas</option>
+              </select>
+            </label>
+            <label class="filter-field">
+              <span>Nota</span>
+              <select id="ratingFilter">
+                <option value="">Todas</option>
+                <option value="5">5 estrelas</option>
+                <option value="4">4+ estrelas</option>
+                <option value="3">3+ estrelas</option>
+                <option value="2">2+ estrelas</option>
+                <option value="1">1+ estrela</option>
+              </select>
+            </label>
+            <label class="filter-field">
+              <span>Data</span>
+              <input id="dateFilter" type="date" />
+            </label>
+            <button class="reset-button" id="resetFilters" type="button">Limpar filtros</button>
+          </div>
+          <div class="delete-controls hidden" id="deleteControls">
+            <span id="deleteHint">Selecione as experi&ecirc;ncias que deseja deletar.</span>
+            <div>
+              <button class="danger-button" id="confirmDeleteButton" type="button">Deletar selecionadas</button>
+              <button class="secondary-button" id="cancelDeleteButton" type="button">Cancelar</button>
+            </div>
+          </div>
+          <div class="empty-state" id="emptyState">Nenhuma experi&ecirc;ncia registrada ainda.</div>
+          <ul class="experience-list" id="experienceList"></ul>
+        </section>
+      </section>
+    </main>
+
+    <div class="photo-modal hidden" id="photoModal" role="dialog" aria-modal="true" aria-label="Visualiza&ccedil;&atilde;o da foto">
+      <button class="modal-close" id="closePhotoModal" type="button" aria-label="Fechar foto">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+      <img id="modalPhoto" alt="" />
+      <p id="modalCaption"></p>
+    </div>
+
+    <div class="settings-modal hidden" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <section class="settings-card">
+        <div class="settings-heading">
+          <h2 id="settingsTitle">Configura&ccedil;&otilde;es</h2>
+          <button class="modal-close settings-close" id="closeSettingsButton" type="button" aria-label="Fechar configura&ccedil;&otilde;es">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <div class="settings-section">
+          <h3>Perfil</h3>
+          <label class="field">
+            <span>Nome</span>
+            <input id="profileNameInput" type="text" autocomplete="name" />
+          </label>
+          <label class="field">
+            <span>E-mail</span>
+            <input id="profileEmailInput" type="email" autocomplete="email" />
+          </label>
+        </div>
+
+        <div class="settings-section">
+          <h3>Cores dos tipos</h3>
+          <div class="color-settings-grid">
+            <label class="color-field">
+              <span>Gastron&ocirc;mica</span>
+              <input id="colorGastronomica" type="color" value="#6f7f22" />
+            </label>
+            <label class="color-field">
+              <span>Cin&eacute;fila</span>
+              <input id="colorCinefila" type="color" value="#9b2f4b" />
+            </label>
+            <label class="color-field">
+              <span>Passeio</span>
+              <input id="colorPasseio" type="color" value="#2f6f9f" />
+            </label>
+            <label class="color-field">
+              <span>Cultural</span>
+              <input id="colorCultural" type="color" value="#6e4aa8" />
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-actions">
+          <button class="submit-button" id="saveSettingsButton" type="button">Salvar configura&ccedil;&otilde;es</button>
+          <button class="secondary-button" id="resetColorsButton" type="button">Restaurar cores</button>
+        </div>
+      </section>
+    </div>
+
+    <script type="module" src="./script.js"></script>
+  </body>
+</html>

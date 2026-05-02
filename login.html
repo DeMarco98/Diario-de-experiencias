@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login | Classificador de Experi&ecirc;ncias</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="auth-shell">
+      <section class="auth-intro" aria-labelledby="auth-title">
+        <div>
+          <p class="eyebrow">Sua conta</p>
+          <h1 id="auth-title">Entre para organizar suas experi&ecirc;ncias.</h1>
+          <p>Use uma conta para preparar o app para sincronizar avalia&ccedil;&otilde;es, fotos e categorias em um pr&oacute;ximo passo.</p>
+        </div>
+      </section>
+
+      <section class="auth-card" aria-label="Acesso">
+        <div class="auth-tabs" role="tablist" aria-label="Escolha entre login e cadastro">
+          <button class="auth-tab active" id="loginTab" type="button">Login</button>
+          <button class="auth-tab" id="signupTab" type="button">Criar conta</button>
+        </div>
+
+        <form class="auth-form" id="loginForm">
+          <h2 id="formTitle">Login</h2>
+          <label class="field hidden" id="nameField">
+            <span>Nome</span>
+            <input id="authName" type="text" autocomplete="name" />
+          </label>
+          <label class="field">
+            <span>E-mail</span>
+            <input id="authEmail" type="email" autocomplete="email" required />
+          </label>
+          <label class="field">
+            <span>Senha</span>
+            <input id="authPassword" type="password" autocomplete="current-password" required />
+          </label>
+          <button class="submit-button" id="authSubmit" type="submit">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg>
+            <span id="authSubmitLabel">Entrar</span>
+          </button>
+          <button class="secondary-button" id="resetPasswordButton" type="button">Recuperar senha</button>
+          <p class="auth-message" id="authMessage" role="status"></p>
+        </form>
+
+        <div class="confirmation-box hidden" id="confirmationBox">
+          <p id="confirmationText"></p>
+          <button class="login-link" id="resendVerificationButton" type="button">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="m4 7 8 6 8-6"/></svg>
+            Reenviar confirma&ccedil;&atilde;o
+          </button>
+        </div>
+
+        <a class="back-link" href="./index.html">Voltar para o app</a>
+      </section>
+    </main>
+
+    <script type="module" src="./login.js"></script>
+  </body>
+</html>
