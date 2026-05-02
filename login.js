@@ -18,9 +18,15 @@ const loginTab = document.querySelector("#loginTab");
 const signupTab = document.querySelector("#signupTab");
 const formTitle = document.querySelector("#formTitle");
 const nameField = document.querySelector("#nameField");
+const lastNameField = document.querySelector("#lastNameField");
+const confirmPasswordField = document.querySelector("#confirmPasswordField");
+const birthDateField = document.querySelector("#birthDateField");
 const authName = document.querySelector("#authName");
+const authLastName = document.querySelector("#authLastName");
 const authEmail = document.querySelector("#authEmail");
 const authPassword = document.querySelector("#authPassword");
+const authConfirmPassword = document.querySelector("#authConfirmPassword");
+const authBirthDate = document.querySelector("#authBirthDate");
 const authSubmit = document.querySelector("#authSubmit");
 const authSubmitLabel = document.querySelector("#authSubmitLabel");
 const authMessage = document.querySelector("#authMessage");
@@ -32,6 +38,7 @@ const resetPasswordButton = document.querySelector("#resetPasswordButton");
 
 let mode = "login";
 let pendingVerificationUser = null;
+let verificationTimer = null;
 
 function setMessage(message, isError = false) {
   authMessage.textContent = message;
@@ -65,8 +72,14 @@ function setMode(nextMode) {
   loginTab.classList.toggle("active", !isSignup);
   signupTab.classList.toggle("active", isSignup);
   nameField.classList.toggle("hidden", !isSignup);
+  lastNameField.classList.toggle("hidden", !isSignup);
+  confirmPasswordField.classList.toggle("hidden", !isSignup);
+  birthDateField.classList.toggle("hidden", !isSignup);
   confirmationBox.classList.add("hidden");
   authName.required = isSignup;
+  authLastName.required = isSignup;
+  authConfirmPassword.required = isSignup;
+  authBirthDate.required = isSignup;
   formTitle.textContent = isSignup ? "Criar conta" : "Login";
   authSubmitLabel.textContent = isSignup ? "Criar conta" : "Entrar";
   authPassword.autocomplete = isSignup ? "new-password" : "current-password";
@@ -74,16 +87,54 @@ function setMode(nextMode) {
   setMessage("");
 }
 
-async function createUserProfile(user, name) {
+function getSignupProfile() {
+  const firstName = authName.value.trim();
+  const lastName = authLastName.value.trim();
+
+  return {
+    firstName,
+    lastName,
+    name: `${firstName} ${lastName}`.trim(),
+    birthDate: authBirthDate.value,
+  };
+}
+
+async function createUserProfile(user, profile = {}) {
+  const fallbackName = user.displayName || user.email?.split("@")[0] || "";
+  const name = profile.name || fallbackName;
+  const userData = {
+    uid: user.uid,
+    name,
+    email: user.email,
+    emailVerified: user.emailVerified,
+    updatedAt: serverTimestamp(),
+  };
+  const profileData = {
+    name,
+    email: user.email,
+    updatedAt: serverTimestamp(),
+  };
+
+  if (profile.firstName !== undefined) {
+    userData.firstName = profile.firstName;
+    profileData.firstName = profile.firstName;
+  }
+
+  if (profile.lastName !== undefined) {
+    userData.lastName = profile.lastName;
+    profileData.lastName = profile.lastName;
+  }
+
+  if (profile.birthDate !== undefined) {
+    userData.birthDate = profile.birthDate;
+    profileData.birthDate = profile.birthDate;
+  }
+
   await setDoc(
     doc(db, "users", user.uid),
     {
-      uid: user.uid,
-      name,
-      email: user.email,
-      emailVerified: user.emailVerified,
+      ...userData,
       createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
     },
     { merge: true },
   );
@@ -91,9 +142,7 @@ async function createUserProfile(user, name) {
   await setDoc(
     doc(db, "users", user.uid, "settings", "profile"),
     {
-      name,
-      email: user.email,
-      updatedAt: serverTimestamp(),
+      ...profileData,
     },
     { merge: true },
   );
@@ -101,21 +150,71 @@ async function createUserProfile(user, name) {
 
 function showVerificationBox(email) {
   confirmationText.textContent =
-    `Enviamos um e-mail de confirmacao para ${email}. Confirme o e-mail antes de entrar no app.`;
+    `Enviamos um e-mail de confirmacao para ${email}. Estamos aguardando a confirmacao para liberar o login.`;
   confirmationBox.classList.remove("hidden");
+}
+
+function stopVerificationWatcher() {
+  if (verificationTimer) window.clearInterval(verificationTimer);
+  verificationTimer = null;
+}
+
+function startVerificationWatcher(user) {
+  stopVerificationWatcher();
+
+  verificationTimer = window.setInterval(async () => {
+    try {
+      await user.reload();
+
+      if (!user.emailVerified) return;
+
+      stopVerificationWatcher();
+      await signOut(auth);
+      window.location.href = "./login.html?verified=1";
+    } catch (error) {
+      console.warn("Nao foi possivel verificar a confirmacao do e-mail.", error);
+    }
+  }, 4000);
+}
+
+function applyInitialMessage() {
+  const params = new URLSearchParams(window.location.search);
+
+  if (params.get("verified") === "1") {
+    setMode("login");
+    setMessage("E-mail confirmado. Agora entre com seu e-mail e senha.");
+    window.history.replaceState({}, document.title, "./login.html");
+  }
 }
 
 loginTab.addEventListener("click", () => setMode("login"));
 signupTab.addEventListener("click", () => setMode("signup"));
+
+document.querySelectorAll(".password-toggle").forEach((button) => {
+  button.addEventListener("click", () => {
+    const input = document.querySelector(`#${button.dataset.target}`);
+    const isPassword = input.type === "password";
+
+    input.type = isPassword ? "text" : "password";
+    button.classList.toggle("active", isPassword);
+    button.setAttribute("aria-label", isPassword ? "Ocultar senha" : "Visualizar senha");
+  });
+});
 
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   const email = authEmail.value.trim().toLowerCase();
   const password = authPassword.value;
-  const name = authName.value.trim();
+  const confirmPassword = authConfirmPassword.value;
+  const profile = getSignupProfile();
 
-  if (!email || !password || (mode === "signup" && !name)) return;
+  if (!email || !password || (mode === "signup" && (!profile.firstName || !profile.lastName || !profile.birthDate))) return;
+
+  if (mode === "signup" && password !== confirmPassword) {
+    setMessage("A confirmacao da senha precisa ser exatamente igual a senha.", true);
+    return;
+  }
 
   authSubmit.disabled = true;
 
@@ -123,18 +222,19 @@ loginForm.addEventListener("submit", async (event) => {
     if (mode === "signup") {
       const credential = await createUserWithEmailAndPassword(auth, email, password);
 
-      await updateProfile(credential.user, { displayName: name });
+      await updateProfile(credential.user, { displayName: profile.name });
       await sendEmailVerification(credential.user);
       try {
-        await createUserProfile(credential.user, name);
+        await createUserProfile(credential.user, profile);
       } catch (profileError) {
         console.warn("Perfil sera criado apos login verificado.", profileError);
       }
       pendingVerificationUser = credential.user;
-      await signOut(auth);
+      startVerificationWatcher(credential.user);
 
       authPassword.value = "";
-      setMessage("Conta criada. Confirme seu e-mail para acessar.");
+      authConfirmPassword.value = "";
+      setMessage("Conta criada. Enviamos o e-mail e estamos aguardando a confirmacao.");
       showVerificationBox(email);
       return;
     }
@@ -150,7 +250,7 @@ loginForm.addEventListener("submit", async (event) => {
       return;
     }
 
-    await createUserProfile(credential.user, credential.user.displayName || email.split("@")[0]);
+    await createUserProfile(credential.user, { name: credential.user.displayName || email.split("@")[0] });
     setMessage("Login realizado. Voltando para o app...");
     window.setTimeout(() => {
       window.location.href = "./index.html";
@@ -193,7 +293,15 @@ resendVerificationButton.addEventListener("click", async () => {
 });
 
 onAuthStateChanged(auth, (user) => {
-  if (user?.emailVerified) {
+  if (user?.emailVerified && mode === "login") {
     window.location.href = "./index.html";
+    return;
+  }
+
+  if (user && !user.emailVerified && mode === "signup") {
+    pendingVerificationUser = user;
+    startVerificationWatcher(user);
   }
 });
+
+applyInitialMessage();
