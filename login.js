@@ -41,6 +41,14 @@ let mode = "login";
 let pendingVerificationUser = null;
 let verificationTimer = null;
 
+const productionLoginUrl = "https://demarco98.github.io/Diario-de-experiencias/login.html?verified=1";
+const verificationActionSettings = {
+  url: window.location.protocol === "file:"
+    ? productionLoginUrl
+    : `${window.location.origin}${window.location.pathname}?verified=1`,
+  handleCodeInApp: false,
+};
+
 function setMessage(message, isError = false) {
   authMessage.textContent = message;
   authMessage.classList.toggle("error", isError);
@@ -157,7 +165,7 @@ async function createUserProfile(user, profile = {}) {
 
 function showVerificationBox(email) {
   confirmationText.textContent =
-    `Enviamos um e-mail de confirmacao para ${email}. Estamos aguardando a confirmacao para liberar o login.`;
+    `Enviamos um e-mail de confirmacao para ${email}. Estamos aguardando a confirmacao para liberar o login. Se o link nao aparecer clicavel, copie e cole o endereco do e-mail no navegador.`;
   confirmationBox.classList.remove("hidden");
 }
 
@@ -269,12 +277,7 @@ loginForm.addEventListener("submit", async (event) => {
       const credential = await createUserWithEmailAndPassword(auth, email, password);
 
       await updateProfile(credential.user, { displayName: profile.name });
-      await sendEmailVerification(credential.user);
-      try {
-        await createUserProfile(credential.user, profile);
-      } catch (profileError) {
-        console.warn("Perfil sera criado apos login verificado.", profileError);
-      }
+      await sendEmailVerification(credential.user, verificationActionSettings);
       pendingVerificationUser = credential.user;
       startVerificationWatcher(credential.user);
 
@@ -282,6 +285,10 @@ loginForm.addEventListener("submit", async (event) => {
       authConfirmPassword.value = "";
       setMessage("Conta criada. Enviamos o e-mail e estamos aguardando a confirmacao.");
       showVerificationBox(email);
+
+      createUserProfile(credential.user, profile).catch((profileError) => {
+        console.warn("Perfil sera criado apos login verificado.", profileError);
+      });
       return;
     }
 
@@ -289,7 +296,7 @@ loginForm.addEventListener("submit", async (event) => {
 
     if (!credential.user.emailVerified) {
       pendingVerificationUser = credential.user;
-      await sendEmailVerification(credential.user);
+      await sendEmailVerification(credential.user, verificationActionSettings);
       await signOut(auth);
       setMessage("Seu e-mail ainda nao foi confirmado.", true);
       showVerificationBox(email);
@@ -331,7 +338,7 @@ resendVerificationButton.addEventListener("click", async () => {
   }
 
   try {
-    await sendEmailVerification(pendingVerificationUser);
+    await sendEmailVerification(pendingVerificationUser, verificationActionSettings);
     setMessage("Enviamos outro e-mail de confirmacao.");
   } catch (error) {
     setMessage(getFriendlyError(error), true);
