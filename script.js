@@ -70,6 +70,7 @@ const photoPreview = document.querySelector("#photoPreview");
 const submitButton = document.querySelector("#submitButton");
 const submitLabel = document.querySelector("#submitLabel");
 const cancelEditButton = document.querySelector("#cancelEditButton");
+const formMessage = document.querySelector("#formMessage");
 const starButtons = Array.from(document.querySelectorAll(".star"));
 const experienceList = document.querySelector("#experienceList");
 const emptyState = document.querySelector("#emptyState");
@@ -539,10 +540,17 @@ function resetFormState() {
   editingId = null;
   photosInput.value = "";
   customCategoryInput.value = "";
+  formMessage.textContent = "";
+  formMessage.classList.remove("error");
   submitLabel.textContent = "Registrar experiência";
   cancelEditButton.classList.add("hidden");
   renderPhotoPreview();
   paintStars(selectedRating);
+}
+
+function setFormMessage(message, isError = false) {
+  formMessage.textContent = message;
+  formMessage.classList.toggle("error", isError);
 }
 
 function paintStars(rating) {
@@ -901,19 +909,43 @@ addCategoryButton.addEventListener("click", async () => {
   const typeKey = getTypeKey(type);
   const category = customCategoryInput.value.trim();
 
-  if (!category) return;
-
-  if (!isCustomCategory(type, category) && !getCategoriesForType(type).includes(category)) {
-    await addDoc(customCategoriesRef(), {
-      name: category,
-      type,
-      typeKey,
-      createdAt: serverTimestamp(),
-    });
+  if (!category) {
+    setFormMessage("Digite o nome da nova categoria.", true);
+    customCategoryInput.focus();
+    return;
   }
 
-  customCategoryInput.value = "";
-  populateCategorySelect(categoryInput, type, category);
+  addCategoryButton.disabled = true;
+  setFormMessage("");
+
+  try {
+    if (!isCustomCategory(type, category) && !getCategoriesForType(type).includes(category)) {
+      const categoryDoc = await addDoc(customCategoriesRef(), {
+        name: category,
+        type,
+        typeKey,
+        createdAt: serverTimestamp(),
+      });
+
+      customCategories = [
+        ...customCategories,
+        {
+          id: categoryDoc.id,
+          name: category,
+          type,
+          typeKey,
+        },
+      ];
+    }
+
+    customCategoryInput.value = "";
+    populateCategorySelect(categoryInput, type, category);
+    setFormMessage("Categoria adicionada.");
+  } catch (error) {
+    setFormMessage(getFriendlyFirebaseError(error), true);
+  } finally {
+    addCategoryButton.disabled = false;
+  }
 });
 
 customCategoryInput.addEventListener("keydown", (event) => {
@@ -1191,14 +1223,20 @@ form.addEventListener("submit", async (event) => {
   const notes = notesInput.value.trim();
   const type = new FormData(form).get("experienceType");
 
-  if (!name || !category || category === "__other__" || !date) return;
+  if (!name || !category || category === "__other__" || !date) {
+    setFormMessage("Preencha nome, categoria e data antes de registrar.", true);
+    return;
+  }
 
   submitButton.disabled = true;
+  setFormMessage("");
   submitLabel.textContent = selectedPhotos.length
     ? editingId
       ? "Salvando..."
       : "Registrando..."
     : "Buscando foto...";
+
+  let saved = false;
 
   try {
     const photos = selectedPhotos.length
@@ -1227,8 +1265,14 @@ form.addEventListener("submit", async (event) => {
 
     resetFormState();
     nameInput.focus();
+    saved = true;
+  } catch (error) {
+    setFormMessage(getFriendlyFirebaseError(error), true);
   } finally {
     submitButton.disabled = false;
+    if (!saved) {
+      submitLabel.textContent = editingId ? "Salvar alterações" : "Registrar experiência";
+    }
   }
 });
 
