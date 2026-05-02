@@ -120,6 +120,17 @@ let unsubscribeCategories = null;
 let unsubscribeProfile = null;
 let unsubscribeHero = null;
 
+function getFriendlyFirebaseError(error) {
+  const messages = {
+    "auth/invalid-api-key": "A chave do Firebase esta invalida. Confira o firebase-config.js.",
+    "auth/unauthorized-domain": "Adicione demarco98.github.io aos dominios autorizados no Firebase Authentication.",
+    "permission-denied": "Sem permissao no Firestore/Storage. Publique as regras do projeto no Firebase Console.",
+    "storage/unauthorized": "Sem permissao no Firebase Storage. Publique as regras do arquivo storage.rules.",
+  };
+
+  return messages[error.code] || error.message || "Erro inesperado no Firebase.";
+}
+
 function getToday() {
   const today = new Date();
   const year = today.getFullYear();
@@ -327,16 +338,27 @@ function watchUserData() {
       }));
       renderExperiences();
     },
+    (error) => {
+      emptyState.classList.remove("hidden");
+      emptyState.textContent = getFriendlyFirebaseError(error);
+    },
   );
 
-  unsubscribeCategories = onSnapshot(customCategoriesRef(), (snapshot) => {
-    customCategories = snapshot.docs.map((docSnapshot) => ({
-      id: docSnapshot.id,
-      ...docSnapshot.data(),
-    }));
-    populateCategorySelect(categoryInput, getSelectedType(), categoryInput.value);
-    populateCategoryFilter();
-  });
+  unsubscribeCategories = onSnapshot(
+    customCategoriesRef(),
+    (snapshot) => {
+      customCategories = snapshot.docs.map((docSnapshot) => ({
+        id: docSnapshot.id,
+        ...docSnapshot.data(),
+      }));
+      populateCategorySelect(categoryInput, getSelectedType(), categoryInput.value);
+      populateCategoryFilter();
+    },
+    (error) => {
+      emptyState.classList.remove("hidden");
+      emptyState.textContent = getFriendlyFirebaseError(error);
+    },
+  );
 
   unsubscribeProfile = onSnapshot(settingsDocRef("profile"), (snapshot) => {
     profileSettings = snapshot.exists() ? snapshot.data() : {};

@@ -4,12 +4,13 @@ import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.5/firebas
 import { getStorage } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-storage.js";
 
 const firebaseConfig = {
-  apiKey: "COLE_SUA_API_KEY",
-  authDomain: "SEU_PROJETO.firebaseapp.com",
-  projectId: "SEU_PROJETO",
-  storageBucket: "SEU_PROJETO.appspot.com",
-  messagingSenderId: "SEU_MESSAGING_SENDER_ID",
-  appId: "SEU_APP_ID",
+  apiKey: "AIzaSyD4B5G5ntAbItIz6s5zfUOuMCWBekBjNOE",
+  authDomain: "diario-de-experiencias.firebaseapp.com",
+  projectId: "diario-de-experiencias",
+  storageBucket: "diario-de-experiencias.firebasestorage.app",
+  messagingSenderId: "177581985308",
+  appId: "1:177581985308:web:409c6e36f4bf3ab19b19d9",
+  measurementId: "G-HK6FNLESZ7",
 };
 
 const app = initializeApp(firebaseConfig);

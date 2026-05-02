@@ -40,15 +40,22 @@ function setMessage(message, isError = false) {
 
 function getFriendlyError(error) {
   const messages = {
+    "auth/api-key-not-valid.-please-pass-a-valid-api-key.": "A chave do Firebase esta invalida. Preencha o firebase-config.js com os dados reais do seu projeto.",
+    "auth/configuration-not-found": "O Firebase Authentication nao esta configurado. Ative o provedor E-mail/senha no Firebase Console.",
     "auth/email-already-in-use": "Este e-mail ja esta cadastrado.",
     "auth/invalid-email": "Digite um e-mail valido.",
+    "auth/invalid-api-key": "A chave do Firebase esta invalida. Confira o firebase-config.js.",
     "auth/invalid-credential": "E-mail ou senha incorretos.",
+    "auth/network-request-failed": "Nao foi possivel conectar ao Firebase. Verifique a internet e a configuracao do projeto.",
+    "auth/operation-not-allowed": "O login por e-mail e senha nao esta ativado no Firebase Authentication.",
+    "auth/unauthorized-domain": "Este dominio nao esta autorizado no Firebase. Adicione demarco98.github.io em Authentication > Settings > Authorized domains.",
     "auth/weak-password": "Use uma senha com pelo menos 6 caracteres.",
     "auth/missing-password": "Digite sua senha.",
     "auth/too-many-requests": "Muitas tentativas. Tente novamente em alguns minutos.",
+    "permission-denied": "Sem permissao no Firestore. Publique as regras de seguranca do arquivo firestore.rules no Firebase Console.",
   };
 
-  return messages[error.code] || "Nao foi possivel concluir. Tente novamente.";
+  return messages[error.code] || `Nao foi possivel concluir. Detalhe: ${error.code || error.message}`;
 }
 
 function setMode(nextMode) {
@@ -117,8 +124,12 @@ loginForm.addEventListener("submit", async (event) => {
       const credential = await createUserWithEmailAndPassword(auth, email, password);
 
       await updateProfile(credential.user, { displayName: name });
-      await createUserProfile(credential.user, name);
       await sendEmailVerification(credential.user);
+      try {
+        await createUserProfile(credential.user, name);
+      } catch (profileError) {
+        console.warn("Perfil sera criado apos login verificado.", profileError);
+      }
       pendingVerificationUser = credential.user;
       await signOut(auth);
 
