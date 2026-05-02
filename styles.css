@@ -77,7 +77,8 @@ textarea {
 
 .login-link,
 .logout-button,
-.settings-button {
+.settings-button,
+.theme-toggle-button {
   min-height: 44px;
   display: inline-grid;
   gap: 8px;
@@ -106,18 +107,21 @@ textarea {
 
 .logout-button,
 .user-chip,
-.settings-button {
+.settings-button,
+.theme-toggle-button {
   color: #354152;
   background: #edf2f6;
 }
 
-.settings-button {
+.settings-button,
+.theme-toggle-button {
   width: 44px;
   padding: 0;
   place-items: center;
 }
 
-.settings-button svg {
+.settings-button svg,
+.theme-toggle-button svg {
   width: 21px;
 }
 
@@ -1003,7 +1007,7 @@ svg {
 
 .settings-menu {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   margin-bottom: 14px;
 }
@@ -1047,32 +1051,20 @@ svg {
 }
 
 .theme-toggle-button {
-  min-height: 58px;
-  display: inline-grid;
-  grid-template-columns: 32px 1fr;
-  gap: 10px;
-  align-items: center;
-  justify-items: start;
-  padding: 10px 14px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--ink);
-  background: var(--wash);
-  cursor: pointer;
-  font-weight: 850;
+  border: 0;
 }
 
 .theme-icon {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   display: none;
   place-items: center;
   border-radius: 999px;
 }
 
 .theme-icon svg {
-  width: 21px;
-  height: 21px;
+  width: 20px;
+  height: 20px;
 }
 
 .theme-toggle-button[data-theme="light"] .theme-icon-sun {
@@ -1185,6 +1177,7 @@ svg {
 :root[data-theme="dark"] .logout-button,
 :root[data-theme="dark"] .user-chip,
 :root[data-theme="dark"] .settings-button,
+:root[data-theme="dark"] .theme-toggle-button,
 :root[data-theme="dark"] .settings-close,
 :root[data-theme="dark"] .secondary-button,
 :root[data-theme="dark"] .reset-button,

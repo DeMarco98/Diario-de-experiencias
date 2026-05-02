@@ -52,7 +52,6 @@ const deleteAccountButton = document.querySelector("#deleteAccountButton");
 const settingsTabs = Array.from(document.querySelectorAll("[data-settings-tab]"));
 const settingsPanels = Array.from(document.querySelectorAll("[data-settings-panel]"));
 const themeToggleButton = document.querySelector("#themeToggleButton");
-const themeToggleLabel = document.querySelector("#themeToggleLabel");
 const heroPanel = document.querySelector("#heroPanel");
 const heroTitleInput = document.querySelector("#heroTitleInput");
 const heroPhotoInput = document.querySelector("#heroPhotoInput");
@@ -288,9 +287,8 @@ function applyTheme(theme = getActiveTheme()) {
 
   document.documentElement.dataset.theme = normalizedTheme;
 
-  if (themeToggleButton && themeToggleLabel) {
+  if (themeToggleButton) {
     themeToggleButton.dataset.theme = normalizedTheme;
-    themeToggleLabel.textContent = normalizedTheme === "dark" ? "Modo escuro" : "Modo claro";
     themeToggleButton.setAttribute(
       "aria-label",
       normalizedTheme === "dark" ? "Alternar para modo claro" : "Alternar para modo escuro",
@@ -382,6 +380,7 @@ function applyAuthState() {
   loginLink.classList.toggle("hidden", authenticated);
   logoutButton.classList.toggle("hidden", !authenticated);
   settingsButton.classList.toggle("hidden", !authenticated);
+  themeToggleButton.classList.toggle("hidden", !authenticated);
   userChip.classList.toggle("hidden", !authenticated);
   userChip.textContent = authenticated ? displayName : "";
 
