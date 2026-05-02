@@ -1115,6 +1115,12 @@ svg {
   margin-top: 14px;
 }
 
+.settings-actions .submit-button {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  text-align: center;
+}
+
 .settings-message {
   min-height: 20px;
   margin: 12px 0;
