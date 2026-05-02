@@ -238,11 +238,27 @@
           <h3>Perfil</h3>
           <label class="field">
             <span>Nome</span>
-            <input id="profileNameInput" type="text" autocomplete="name" />
+            <input id="profileFirstNameInput" type="text" autocomplete="given-name" />
           </label>
           <label class="field">
-            <span>E-mail</span>
-            <input id="profileEmailInput" type="email" autocomplete="email" />
+            <span>Sobrenome</span>
+            <input id="profileLastNameInput" type="text" autocomplete="family-name" />
+          </label>
+          <label class="field">
+            <span>Data de nascimento</span>
+            <input id="profileBirthDateInput" type="date" autocomplete="bday" />
+          </label>
+        </div>
+
+        <div class="settings-section">
+          <h3>Alterar senha</h3>
+          <label class="field">
+            <span>Nova senha</span>
+            <input id="profilePasswordInput" type="password" autocomplete="new-password" />
+          </label>
+          <label class="field">
+            <span>Confirmar nova senha</span>
+            <input id="profileConfirmPasswordInput" type="password" autocomplete="new-password" />
           </label>
         </div>
 
@@ -272,6 +288,8 @@
           <button class="submit-button" id="saveSettingsButton" type="button">Salvar configura&ccedil;&otilde;es</button>
           <button class="secondary-button" id="resetColorsButton" type="button">Restaurar cores</button>
         </div>
+        <p class="settings-message" id="settingsMessage" role="status"></p>
+        <button class="danger-button account-delete-button" id="deleteAccountButton" type="button">Excluir conta</button>
       </section>
     </div>
 

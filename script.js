@@ -1,9 +1,10 @@
 import { auth, db, storage } from "./firebase-config.js";
 import {
+  deleteUser,
   onAuthStateChanged,
   reload,
   signOut,
-  updateEmail,
+  updatePassword,
   updateProfile,
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 import {
@@ -35,14 +36,19 @@ const userChip = document.querySelector("#userChip");
 const settingsButton = document.querySelector("#settingsButton");
 const settingsModal = document.querySelector("#settingsModal");
 const closeSettingsButton = document.querySelector("#closeSettingsButton");
-const profileNameInput = document.querySelector("#profileNameInput");
-const profileEmailInput = document.querySelector("#profileEmailInput");
+const profileFirstNameInput = document.querySelector("#profileFirstNameInput");
+const profileLastNameInput = document.querySelector("#profileLastNameInput");
+const profileBirthDateInput = document.querySelector("#profileBirthDateInput");
+const profilePasswordInput = document.querySelector("#profilePasswordInput");
+const profileConfirmPasswordInput = document.querySelector("#profileConfirmPasswordInput");
 const colorGastronomica = document.querySelector("#colorGastronomica");
 const colorCinefila = document.querySelector("#colorCinefila");
 const colorPasseio = document.querySelector("#colorPasseio");
 const colorCultural = document.querySelector("#colorCultural");
 const saveSettingsButton = document.querySelector("#saveSettingsButton");
 const resetColorsButton = document.querySelector("#resetColorsButton");
+const settingsMessage = document.querySelector("#settingsMessage");
+const deleteAccountButton = document.querySelector("#deleteAccountButton");
 const heroPanel = document.querySelector("#heroPanel");
 const heroTitleInput = document.querySelector("#heroTitleInput");
 const heroPhotoInput = document.querySelector("#heroPhotoInput");
@@ -123,6 +129,8 @@ let unsubscribeHero = null;
 function getFriendlyFirebaseError(error) {
   const messages = {
     "auth/invalid-api-key": "A chave do Firebase esta invalida. Confira o firebase-config.js.",
+    "auth/requires-recent-login": "Por seguranca, saia da conta, entre novamente e tente de novo.",
+    "auth/weak-password": "Use uma senha com pelo menos 6 caracteres.",
     "auth/unauthorized-domain": "Adicione demarco98.github.io aos dominios autorizados no Firebase Authentication.",
     "permission-denied": "Sem permissao no Firestore/Storage. Publique as regras do projeto no Firebase Console.",
     "storage/unauthorized": "Sem permissao no Firebase Storage. Publique as regras do arquivo storage.rules.",
@@ -267,6 +275,17 @@ function getActiveTypeColors() {
   return { ...defaultTypeColors, ...(profileSettings.typeColors || {}) };
 }
 
+function getProfileNameParts() {
+  const fallbackName = profileSettings.name || currentUser?.displayName || currentUser?.email?.split("@")[0] || "";
+  const [firstNameFallback, ...lastNameFallback] = fallbackName.split(" ").filter(Boolean);
+
+  return {
+    firstName: profileSettings.firstName || firstNameFallback || "",
+    lastName: profileSettings.lastName || lastNameFallback.join(" "),
+    birthDate: profileSettings.birthDate || "",
+  };
+}
+
 function applyProfileSettings() {
   const colors = getActiveTypeColors();
 
@@ -279,13 +298,19 @@ function applyProfileSettings() {
 
 function populateSettingsForm() {
   const colors = getActiveTypeColors();
+  const profile = getProfileNameParts();
 
-  profileNameInput.value = profileSettings.name || currentUser?.displayName || "";
-  profileEmailInput.value = currentUser?.email || "";
+  profileFirstNameInput.value = profile.firstName;
+  profileLastNameInput.value = profile.lastName;
+  profileBirthDateInput.value = profile.birthDate;
+  profilePasswordInput.value = "";
+  profileConfirmPasswordInput.value = "";
   colorGastronomica.value = colors.gastronomica;
   colorCinefila.value = colors.cinefila;
   colorPasseio.value = colors.passeio;
   colorCultural.value = colors.cultural;
+  settingsMessage.textContent = "";
+  settingsMessage.classList.remove("error");
 }
 
 function applyFormCollapseState() {
@@ -933,7 +958,7 @@ settingsButton.addEventListener("click", () => {
 
   populateSettingsForm();
   settingsModal.classList.remove("hidden");
-  profileNameInput.focus();
+  profileFirstNameInput.focus();
 });
 
 collapseFormButton.addEventListener("click", async () => {
@@ -972,46 +997,103 @@ settingsModal.addEventListener("click", (event) => {
 saveSettingsButton.addEventListener("click", async () => {
   if (!isAuthenticated()) return;
 
-  const name = profileNameInput.value.trim() || currentUser.displayName || currentUser.email;
-  const email = profileEmailInput.value.trim().toLowerCase() || currentUser.email;
-  const emailChanged = email !== currentUser.email;
+  const firstName = profileFirstNameInput.value.trim();
+  const lastName = profileLastNameInput.value.trim();
+  const birthDate = profileBirthDateInput.value;
+  const name = `${firstName} ${lastName}`.trim() || currentUser.displayName || currentUser.email;
+  const password = profilePasswordInput.value;
+  const confirmPassword = profileConfirmPasswordInput.value;
 
-  await updateProfile(currentUser, { displayName: name });
+  settingsMessage.textContent = "";
+  settingsMessage.classList.remove("error");
+  saveSettingsButton.disabled = true;
 
-  if (emailChanged) {
-    await updateEmail(currentUser, email);
+  if (password || confirmPassword) {
+    if (password !== confirmPassword) {
+      settingsMessage.textContent = "As senhas nao correspondem.";
+      settingsMessage.classList.add("error");
+      saveSettingsButton.disabled = false;
+      return;
+    }
+
+    try {
+      await updatePassword(currentUser, password);
+      profilePasswordInput.value = "";
+      profileConfirmPasswordInput.value = "";
+    } catch (error) {
+      settingsMessage.textContent = getFriendlyFirebaseError(error);
+      settingsMessage.classList.add("error");
+      saveSettingsButton.disabled = false;
+      return;
+    }
   }
 
-  await setDoc(
-    userDocRef(),
-    {
-      uid: currentUser.uid,
-      name,
-      email,
-      emailVerified: currentUser.emailVerified,
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
+  try {
+    await updateProfile(currentUser, { displayName: name });
 
-  await setDoc(
-    settingsDocRef("profile"),
-    {
-      name,
-      email,
-      typeColors: {
-        gastronomica: colorGastronomica.value,
-        cinefila: colorCinefila.value,
-        passeio: colorPasseio.value,
-        cultural: colorCultural.value,
+    await setDoc(
+      userDocRef(),
+      {
+        uid: currentUser.uid,
+        name,
+        firstName,
+        lastName,
+        birthDate,
+        email: currentUser.email,
+        emailVerified: currentUser.emailVerified,
+        updatedAt: serverTimestamp(),
       },
-      formCollapsed: Boolean(profileSettings.formCollapsed),
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
+      { merge: true },
+    );
 
-  closeSettings();
+    await setDoc(
+      settingsDocRef("profile"),
+      {
+        name,
+        firstName,
+        lastName,
+        birthDate,
+        email: currentUser.email,
+        typeColors: {
+          gastronomica: colorGastronomica.value,
+          cinefila: colorCinefila.value,
+          passeio: colorPasseio.value,
+          cultural: colorCultural.value,
+        },
+        formCollapsed: Boolean(profileSettings.formCollapsed),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    settingsMessage.textContent = "Configuracoes salvas.";
+  } catch (error) {
+    settingsMessage.textContent = getFriendlyFirebaseError(error);
+    settingsMessage.classList.add("error");
+  } finally {
+    saveSettingsButton.disabled = false;
+  }
+});
+
+deleteAccountButton.addEventListener("click", async () => {
+  if (!isAuthenticated()) return;
+
+  const confirmed = window.confirm("Tem certeza que deseja excluir sua conta? Essa acao nao pode ser desfeita.");
+
+  if (!confirmed) return;
+
+  deleteAccountButton.disabled = true;
+  settingsMessage.textContent = "";
+  settingsMessage.classList.remove("error");
+
+  try {
+    await deleteUser(currentUser);
+    window.location.href = "./login.html";
+  } catch (error) {
+    settingsMessage.textContent = getFriendlyFirebaseError(error);
+    settingsMessage.classList.add("error");
+    deleteAccountButton.disabled = false;
+  }
 });
 
 resetColorsButton.addEventListener("click", () => {
