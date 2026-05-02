@@ -49,6 +49,10 @@ const saveSettingsButton = document.querySelector("#saveSettingsButton");
 const resetColorsButton = document.querySelector("#resetColorsButton");
 const settingsMessage = document.querySelector("#settingsMessage");
 const deleteAccountButton = document.querySelector("#deleteAccountButton");
+const settingsTabs = Array.from(document.querySelectorAll("[data-settings-tab]"));
+const settingsPanels = Array.from(document.querySelectorAll("[data-settings-panel]"));
+const themeToggleButton = document.querySelector("#themeToggleButton");
+const themeToggleLabel = document.querySelector("#themeToggleLabel");
 const heroPanel = document.querySelector("#heroPanel");
 const heroTitleInput = document.querySelector("#heroTitleInput");
 const heroPhotoInput = document.querySelector("#heroPhotoInput");
@@ -275,6 +279,25 @@ function getActiveTypeColors() {
   return { ...defaultTypeColors, ...(profileSettings.typeColors || {}) };
 }
 
+function getActiveTheme() {
+  return profileSettings.theme === "dark" ? "dark" : "light";
+}
+
+function applyTheme(theme = getActiveTheme()) {
+  const normalizedTheme = theme === "dark" ? "dark" : "light";
+
+  document.documentElement.dataset.theme = normalizedTheme;
+
+  if (themeToggleButton && themeToggleLabel) {
+    themeToggleButton.dataset.theme = normalizedTheme;
+    themeToggleLabel.textContent = normalizedTheme === "dark" ? "Modo escuro" : "Modo claro";
+    themeToggleButton.setAttribute(
+      "aria-label",
+      normalizedTheme === "dark" ? "Alternar para modo claro" : "Alternar para modo escuro",
+    );
+  }
+}
+
 function getProfileNameParts() {
   const fallbackName = profileSettings.name || currentUser?.displayName || currentUser?.email?.split("@")[0] || "";
   const [firstNameFallback, ...lastNameFallback] = fallbackName.split(" ").filter(Boolean);
@@ -290,6 +313,7 @@ function applyProfileSettings() {
   const colors = getActiveTypeColors();
 
   Object.entries(colors).forEach(([typeKey, color]) => applyTypeColor(typeKey, color));
+  applyTheme();
   userChip.textContent = isAuthenticated()
     ? profileSettings.name || currentUser.displayName || currentUser.email
     : "";
@@ -305,10 +329,27 @@ function populateSettingsForm() {
   profileBirthDateInput.value = profile.birthDate;
   profilePasswordInput.value = "";
   profileConfirmPasswordInput.value = "";
+  applyTheme();
   colorGastronomica.value = colors.gastronomica;
   colorCinefila.value = colors.cinefila;
   colorPasseio.value = colors.passeio;
   colorCultural.value = colors.cultural;
+  settingsMessage.textContent = "";
+  settingsMessage.classList.remove("error");
+}
+
+function showSettingsPanel(panelName) {
+  settingsTabs.forEach((tab) => {
+    const active = tab.dataset.settingsTab === panelName;
+
+    tab.classList.toggle("active", active);
+    tab.setAttribute("aria-selected", String(active));
+  });
+
+  settingsPanels.forEach((panel) => {
+    panel.classList.toggle("active", panel.dataset.settingsPanel === panelName);
+  });
+
   settingsMessage.textContent = "";
   settingsMessage.classList.remove("error");
 }
@@ -419,6 +460,7 @@ async function ensureUserDocs(user) {
       email: user.email,
       typeColors: defaultTypeColors,
       formCollapsed: false,
+      theme: "light",
       updatedAt: serverTimestamp(),
     });
   }
@@ -957,6 +999,7 @@ settingsButton.addEventListener("click", () => {
   if (!isAuthenticated()) return;
 
   populateSettingsForm();
+  showSettingsPanel("profile");
   settingsModal.classList.remove("hidden");
   profileFirstNameInput.focus();
 });
@@ -983,6 +1026,39 @@ closeSettingsButton.addEventListener("click", closeSettings);
 
 settingsModal.addEventListener("click", (event) => {
   if (event.target === settingsModal) closeSettings();
+});
+
+settingsTabs.forEach((tab) => {
+  tab.addEventListener("click", () => {
+    showSettingsPanel(tab.dataset.settingsTab);
+  });
+});
+
+themeToggleButton.addEventListener("click", async () => {
+  if (!isAuthenticated()) return;
+
+  const theme = getActiveTheme() === "dark" ? "light" : "dark";
+
+  profileSettings = {
+    ...profileSettings,
+    theme,
+  };
+  applyTheme(theme);
+
+  try {
+    await setDoc(
+      settingsDocRef("profile"),
+      {
+        ...profileSettings,
+        theme,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    );
+  } catch (error) {
+    settingsMessage.textContent = getFriendlyFirebaseError(error);
+    settingsMessage.classList.add("error");
+  }
 });
 
 [colorGastronomica, colorCinefila, colorPasseio, colorCultural].forEach((input) => {
@@ -1061,6 +1137,7 @@ saveSettingsButton.addEventListener("click", async () => {
           cultural: colorCultural.value,
         },
         formCollapsed: Boolean(profileSettings.formCollapsed),
+        theme: getActiveTheme(),
         updatedAt: serverTimestamp(),
       },
       { merge: true },

@@ -17,6 +17,19 @@
   --type-line: rgba(15, 118, 110, 0.32);
 }
 
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ink: #edf4f8;
+  --muted: #aebacc;
+  --line: #344255;
+  --panel: #141d29;
+  --wash: #1e2a39;
+  --accent: #39b8a9;
+  --accent-dark: #8fe4d8;
+  --blue: #8db8f2;
+  --shadow: 0 18px 55px rgba(0, 0, 0, 0.34);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -30,6 +43,13 @@ body {
   color: var(--ink);
   background:
     linear-gradient(rgba(244, 247, 248, 0.88), rgba(244, 247, 248, 0.96)),
+    url("https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1800&q=80")
+      center / cover fixed;
+}
+
+:root[data-theme="dark"] body {
+  background:
+    linear-gradient(rgba(9, 14, 22, 0.88), rgba(9, 14, 22, 0.94)),
     url("https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1800&q=80")
       center / cover fixed;
 }
@@ -981,16 +1001,90 @@ svg {
   background: #edf2f6;
 }
 
-.settings-section {
+.settings-menu {
   display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.settings-tab {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: #5a6778;
+  background: #fff;
+  cursor: pointer;
+  font-weight: 850;
+}
+
+.settings-tab.active {
+  border-color: var(--accent);
+  color: var(--accent-dark);
+  background: #e8f5f2;
+}
+
+.settings-section {
+  display: none;
   gap: 12px;
   padding: 16px 0;
   border-top: 1px solid var(--line);
 }
 
+.settings-section.active {
+  display: grid;
+}
+
 .settings-section h3 {
   margin: 0;
   font-size: 1rem;
+}
+
+.settings-note {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.theme-toggle-button {
+  min-height: 58px;
+  display: inline-grid;
+  grid-template-columns: 32px 1fr;
+  gap: 10px;
+  align-items: center;
+  justify-items: start;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--wash);
+  cursor: pointer;
+  font-weight: 850;
+}
+
+.theme-icon {
+  width: 30px;
+  height: 30px;
+  display: none;
+  place-items: center;
+  border-radius: 999px;
+}
+
+.theme-icon svg {
+  width: 21px;
+  height: 21px;
+}
+
+.theme-toggle-button[data-theme="light"] .theme-icon-sun {
+  display: grid;
+  color: #996b04;
+  background: #fff4cb;
+}
+
+.theme-toggle-button[data-theme="dark"] .theme-icon-moon {
+  display: grid;
+  color: #c7d6ff;
+  background: #273656;
 }
 
 .color-settings-grid {
@@ -1024,7 +1118,7 @@ svg {
 
 .settings-actions {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr;
   gap: 10px;
   margin-top: 14px;
 }
@@ -1059,6 +1153,68 @@ svg {
   align-items: start;
   margin: 0 auto;
   padding: 32px 0;
+}
+
+:root[data-theme="dark"] .locked-panel,
+:root[data-theme="dark"] .panel,
+:root[data-theme="dark"] .rating-form,
+:root[data-theme="dark"] .list-panel,
+:root[data-theme="dark"] .settings-card,
+:root[data-theme="dark"] .auth-intro,
+:root[data-theme="dark"] .auth-card {
+  border-color: rgba(52, 66, 85, 0.9);
+  background: rgba(20, 29, 41, 0.96);
+}
+
+:root[data-theme="dark"] .intro-panel {
+  background:
+    linear-gradient(rgba(20, 29, 41, 0.86), rgba(20, 29, 41, 0.94)),
+    var(--hero-photo, transparent) center / cover;
+}
+
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] select,
+:root[data-theme="dark"] textarea,
+:root[data-theme="dark"] .auth-tab,
+:root[data-theme="dark"] .settings-tab {
+  color: var(--ink);
+  border-color: var(--line);
+  background: #101824;
+}
+
+:root[data-theme="dark"] .logout-button,
+:root[data-theme="dark"] .user-chip,
+:root[data-theme="dark"] .settings-button,
+:root[data-theme="dark"] .settings-close,
+:root[data-theme="dark"] .secondary-button,
+:root[data-theme="dark"] .reset-button,
+:root[data-theme="dark"] .delete-select,
+:root[data-theme="dark"] .color-field {
+  color: var(--ink);
+  background: var(--wash);
+}
+
+:root[data-theme="dark"] .auth-tab.active,
+:root[data-theme="dark"] .settings-tab.active,
+:root[data-theme="dark"] .password-toggle:hover,
+:root[data-theme="dark"] .password-toggle.active {
+  color: var(--accent-dark);
+  background: #12352f;
+}
+
+:root[data-theme="dark"] .experience-card {
+  background:
+    linear-gradient(90deg, rgba(57, 184, 169, 0.14), rgba(20, 29, 41, 0) 38%),
+    rgba(20, 29, 41, 0.96);
+}
+
+:root[data-theme="dark"] .confirmation-box {
+  border-color: #24584f;
+  background: #12352f;
+}
+
+:root[data-theme="dark"] .confirmation-box p {
+  color: #c8f4ec;
 }
 
 .auth-intro,
@@ -1302,7 +1458,8 @@ svg {
   }
 
   .color-settings-grid,
-  .settings-actions {
+  .settings-actions,
+  .settings-menu {
     grid-template-columns: 1fr;
   }
 
