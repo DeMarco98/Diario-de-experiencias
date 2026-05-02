@@ -553,6 +553,15 @@ function setFormMessage(message, isError = false) {
   formMessage.classList.toggle("error", isError);
 }
 
+function withTimeout(promise, message = "O Firebase demorou para responder. Tente novamente em alguns segundos.") {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = window.setTimeout(() => reject(new Error(message)), 12000);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timeoutId));
+}
+
 function paintStars(rating) {
   starButtons.forEach((button) => {
     button.classList.toggle("active", Number(button.dataset.rating) <= rating);
@@ -754,10 +763,16 @@ function applyImageFallback(image, fallback) {
 async function uploadDataUrl(dataUrl, folder) {
   const fileRef = ref(storage, `users/${currentUser.uid}/${folder}/${crypto.randomUUID()}.jpg`);
 
-  await uploadString(fileRef, dataUrl, "data_url");
+  await withTimeout(
+    uploadString(fileRef, dataUrl, "data_url"),
+    "O upload da foto demorou para responder. Tente novamente em alguns segundos.",
+  );
 
   return {
-    url: await getDownloadURL(fileRef),
+    url: await withTimeout(
+      getDownloadURL(fileRef),
+      "Nao foi possivel obter o link da foto agora. Tente novamente.",
+    ),
     path: fileRef.fullPath,
     source: "storage",
   };
@@ -920,28 +935,39 @@ addCategoryButton.addEventListener("click", async () => {
 
   try {
     if (!isCustomCategory(type, category) && !getCategoriesForType(type).includes(category)) {
-      const categoryDoc = await addDoc(customCategoriesRef(), {
-        name: category,
-        type,
-        typeKey,
-        createdAt: serverTimestamp(),
-      });
-
+      const temporaryId = `temp-${Date.now()}`;
       customCategories = [
         ...customCategories,
         {
-          id: categoryDoc.id,
+          id: temporaryId,
           name: category,
           type,
           typeKey,
         },
       ];
-    }
+      customCategoryInput.value = "";
+      populateCategorySelect(categoryInput, type, category);
+      setFormMessage("Categoria adicionada. Salvando...");
 
-    customCategoryInput.value = "";
-    populateCategorySelect(categoryInput, type, category);
-    setFormMessage("Categoria adicionada.");
+      const categoryDoc = await withTimeout(addDoc(customCategoriesRef(), {
+        name: category,
+        type,
+        typeKey,
+        createdAt: serverTimestamp(),
+      }));
+
+      customCategories = customCategories.map((item) =>
+        item.id === temporaryId ? { ...item, id: categoryDoc.id } : item,
+      );
+      setFormMessage("Categoria salva.");
+    } else {
+      customCategoryInput.value = "";
+      populateCategorySelect(categoryInput, type, category);
+      setFormMessage("Categoria selecionada.");
+    }
   } catch (error) {
+    customCategories = customCategories.filter((item) => item.name !== category || item.typeKey !== typeKey);
+    populateCategorySelect(categoryInput, type, "__other__");
     setFormMessage(getFriendlyFirebaseError(error), true);
   } finally {
     addCategoryButton.disabled = false;
@@ -1255,12 +1281,12 @@ form.addEventListener("submit", async (event) => {
     };
 
     if (editingId) {
-      await updateDoc(doc(db, "users", currentUser.uid, "experiences", editingId), experienceData);
+      await withTimeout(updateDoc(doc(db, "users", currentUser.uid, "experiences", editingId), experienceData));
     } else {
-      await addDoc(experiencesRef(), {
+      await withTimeout(addDoc(experiencesRef(), {
         ...experienceData,
         createdAt: serverTimestamp(),
-      });
+      }));
     }
 
     resetFormState();
