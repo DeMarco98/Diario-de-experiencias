@@ -309,6 +309,7 @@ function applyHeroSettings() {
 
 function applyAuthState() {
   const authenticated = isAuthenticated();
+  const displayName = profileSettings.name || currentUser?.displayName || currentUser?.email?.split("@")[0] || "";
 
   workspace.classList.toggle("hidden", !authenticated);
   lockedPanel.classList.toggle("hidden", authenticated);
@@ -316,6 +317,7 @@ function applyAuthState() {
   logoutButton.classList.toggle("hidden", !authenticated);
   settingsButton.classList.toggle("hidden", !authenticated);
   userChip.classList.toggle("hidden", !authenticated);
+  userChip.textContent = authenticated ? displayName : "";
 
   if (!authenticated) {
     totalCount.textContent = "0";
@@ -1145,8 +1147,12 @@ onAuthStateChanged(auth, async (user) => {
   currentUser = user;
 
   if (user) {
-    await reload(user);
-    currentUser = auth.currentUser;
+    try {
+      await reload(user);
+      currentUser = auth.currentUser;
+    } catch (error) {
+      console.warn("Nao foi possivel atualizar a sessao do usuario.", error);
+    }
   }
 
   if (!isAuthenticated()) {
@@ -1161,9 +1167,15 @@ onAuthStateChanged(auth, async (user) => {
     return;
   }
 
-  await ensureUserDocs(currentUser);
   applyAuthState();
-  watchUserData();
+
+  try {
+    await ensureUserDocs(currentUser);
+    watchUserData();
+  } catch (error) {
+    emptyState.classList.remove("hidden");
+    emptyState.textContent = getFriendlyFirebaseError(error);
+  }
 });
 
 populateCategorySelect(categoryInput, getSelectedType());
