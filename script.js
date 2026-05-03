@@ -34,6 +34,11 @@ const loginLink = document.querySelector("#loginLink");
 const logoutButton = document.querySelector("#logoutButton");
 const userChip = document.querySelector("#userChip");
 const settingsButton = document.querySelector("#settingsButton");
+const notificationButton = document.querySelector("#notificationButton");
+const notificationCount = document.querySelector("#notificationCount");
+const notificationsModal = document.querySelector("#notificationsModal");
+const closeNotificationsButton = document.querySelector("#closeNotificationsButton");
+const notificationsList = document.querySelector("#notificationsList");
 const settingsModal = document.querySelector("#settingsModal");
 const closeSettingsButton = document.querySelector("#closeSettingsButton");
 const profileFirstNameInput = document.querySelector("#profileFirstNameInput");
@@ -121,6 +126,7 @@ let experiences = [];
 let customCategories = [];
 let profileSettings = {};
 let heroSettings = {};
+let notifications = [];
 let selectedPhotos = [];
 let editingId = null;
 let deleteMode = false;
@@ -129,6 +135,7 @@ let unsubscribeExperiences = null;
 let unsubscribeCategories = null;
 let unsubscribeProfile = null;
 let unsubscribeHero = null;
+let unsubscribeNotifications = null;
 
 function getFriendlyFirebaseError(error) {
   const messages = {
@@ -164,18 +171,23 @@ function customCategoriesRef() {
   return collection(db, "users", currentUser.uid, "customCategories");
 }
 
+function notificationsRef(uid = currentUser.uid) {
+  return collection(db, "users", uid, "notifications");
+}
+
 function settingsDocRef(name) {
   return doc(db, "users", currentUser.uid, "settings", name);
 }
 
 function clearSubscriptions() {
-  [unsubscribeExperiences, unsubscribeCategories, unsubscribeProfile, unsubscribeHero].forEach((unsubscribe) => {
+  [unsubscribeExperiences, unsubscribeCategories, unsubscribeProfile, unsubscribeHero, unsubscribeNotifications].forEach((unsubscribe) => {
     if (unsubscribe) unsubscribe();
   });
   unsubscribeExperiences = null;
   unsubscribeCategories = null;
   unsubscribeProfile = null;
   unsubscribeHero = null;
+  unsubscribeNotifications = null;
 }
 
 function isAuthenticated() {
@@ -193,6 +205,19 @@ function getTypeKey(type) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
+}
+
+function normalizeUsername(username) {
+  return username
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9._-]/g, "");
+}
+
+function getCurrentUsername() {
+  return profileSettings.username || currentUser?.email?.split("@")[0] || "usuario";
 }
 
 function getTypeClass(type) {
@@ -382,6 +407,7 @@ function applyAuthState() {
   logoutButton.classList.toggle("hidden", !authenticated);
   settingsButton.classList.toggle("hidden", !authenticated);
   themeToggleButton.classList.toggle("hidden", !authenticated);
+  notificationButton.classList.toggle("hidden", !authenticated);
   userChip.classList.toggle("hidden", !authenticated);
   userChip.textContent = authenticated ? displayName : "";
 
@@ -443,6 +469,20 @@ function watchUserData() {
     heroSettings = snapshot.exists() ? snapshot.data() : {};
     applyHeroSettings();
   });
+
+  unsubscribeNotifications = onSnapshot(
+    query(notificationsRef(), orderBy("createdAt", "desc")),
+    (snapshot) => {
+      notifications = snapshot.docs.map((docSnapshot) => ({
+        id: docSnapshot.id,
+        ...docSnapshot.data(),
+      }));
+      renderNotifications();
+    },
+    (error) => {
+      console.warn("Nao foi possivel carregar notificacoes.", error);
+    },
+  );
 }
 
 async function ensureUserDocs(user) {
@@ -967,6 +1007,7 @@ function renderExperiences() {
     const rating = document.createElement("span");
     const cardActions = document.createElement("div");
     const editButton = document.createElement("button");
+    const shareButton = document.createElement("button");
     const notes = document.createElement("p");
     const photos = document.createElement("div");
 
@@ -1004,8 +1045,15 @@ function renderExperiences() {
     editButton.innerHTML = '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
     editButton.addEventListener("click", () => startEdit(experience));
 
+    shareButton.className = "edit-button share-button";
+    shareButton.type = "button";
+    shareButton.title = "Compartilhar experiÃªncia";
+    shareButton.setAttribute("aria-label", `Compartilhar ${experience.name}`);
+    shareButton.innerHTML = '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 8a3 3 0 1 0-2.8-4"/><path d="M6 14a3 3 0 1 0 2.8 4"/><path d="m8.6 15.4 6.8-3.8"/><path d="m8.6 8.6 6.8 3.8"/></svg>';
+    shareButton.addEventListener("click", () => shareExperience(experience));
+
     cardActions.className = "card-actions";
-    cardActions.append(rating, editButton);
+    cardActions.append(rating, editButton, shareButton);
 
     content.append(heading);
 
@@ -1041,6 +1089,136 @@ function renderExperiences() {
 
     experienceList.appendChild(item);
   });
+}
+
+async function findUserByUsername(username) {
+  const normalizedUsername = normalizeUsername(username);
+
+  if (!normalizedUsername) throw new Error("Digite um nome de usuÃ¡rio.");
+
+  const usernameSnapshot = await getDoc(doc(db, "usernames", normalizedUsername));
+
+  if (!usernameSnapshot.exists()) throw new Error("UsuÃ¡rio nÃ£o encontrado.");
+
+  return usernameSnapshot.data();
+}
+
+async function shareExperience(experience) {
+  if (!isAuthenticated()) return;
+
+  const username = window.prompt("Digite o nome de usuÃ¡rio para compartilhar:");
+
+  if (!username) return;
+
+  try {
+    const targetUser = await findUserByUsername(username);
+
+    if (targetUser.uid === currentUser.uid) {
+      setFormMessage("VocÃª nÃ£o precisa compartilhar com vocÃª mesmo.", true);
+      return;
+    }
+
+    await addDoc(notificationsRef(targetUser.uid), {
+      type: "experience-share",
+      status: "pending",
+      fromUid: currentUser.uid,
+      fromUsername: getCurrentUsername(),
+      fromName: profileSettings.name || currentUser.displayName || currentUser.email,
+      toUid: targetUser.uid,
+      experienceId: experience.id,
+      experience: {
+        name: experience.name,
+        category: experience.category || "",
+        date: experience.date || "",
+        notes: experience.notes || "",
+        photos: experience.photos || [],
+        type: experience.type,
+        typeKey: experience.typeKey || getTypeKey(experience.type),
+        rating: experience.rating,
+        sharedFromUid: currentUser.uid,
+        sharedFromUsername: getCurrentUsername(),
+      },
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    setFormMessage(`Convite enviado para @${normalizeUsername(username)}.`);
+  } catch (error) {
+    setFormMessage(error.message || getFriendlyFirebaseError(error), true);
+  }
+}
+
+function renderNotifications() {
+  const pendingNotifications = notifications.filter((notification) => notification.status === "pending");
+
+  notificationCount.textContent = pendingNotifications.length;
+  notificationCount.classList.toggle("hidden", pendingNotifications.length === 0);
+  notificationsList.innerHTML = "";
+
+  if (notifications.length === 0) {
+    notificationsList.innerHTML = '<p class="settings-note">Nenhuma notificaÃ§Ã£o por enquanto.</p>';
+    return;
+  }
+
+  notifications.forEach((notification) => {
+    const item = document.createElement("article");
+    const title = document.createElement("strong");
+    const description = document.createElement("p");
+    const actions = document.createElement("div");
+
+    item.className = "notification-item";
+    title.textContent = notification.status === "pending" ? "Convite de experiÃªncia" : "Convite respondido";
+    description.textContent =
+      notification.status === "pending"
+        ? `${notification.fromName || notification.fromUsername} quer compartilhar "${notification.experience?.name || "uma experiÃªncia"}" com vocÃª.`
+        : `VocÃª ${notification.status === "accepted" ? "aceitou" : "recusou"} "${notification.experience?.name || "uma experiÃªncia"}".`;
+
+    item.append(title, description);
+
+    if (notification.status === "pending") {
+      const acceptButton = document.createElement("button");
+      const declineButton = document.createElement("button");
+
+      actions.className = "notification-actions";
+      acceptButton.className = "submit-button";
+      acceptButton.type = "button";
+      acceptButton.textContent = "Aceitar";
+      acceptButton.addEventListener("click", () => respondToShare(notification, true));
+
+      declineButton.className = "secondary-button";
+      declineButton.type = "button";
+      declineButton.textContent = "Recusar";
+      declineButton.addEventListener("click", () => respondToShare(notification, false));
+
+      actions.append(acceptButton, declineButton);
+      item.appendChild(actions);
+    }
+
+    notificationsList.appendChild(item);
+  });
+}
+
+async function respondToShare(notification, accepted) {
+  if (!isAuthenticated()) return;
+
+  try {
+    if (accepted) {
+      await addDoc(experiencesRef(), {
+        ...notification.experience,
+        shared: true,
+        sharedAcceptedAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    await updateDoc(doc(db, "users", currentUser.uid, "notifications", notification.id), {
+      status: accepted ? "accepted" : "declined",
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    notificationsList.innerHTML = `<p class="settings-message error">${getFriendlyFirebaseError(error)}</p>`;
+  }
 }
 
 starButtons.forEach((button) => {
@@ -1230,6 +1408,21 @@ closeSettingsButton.addEventListener("click", closeSettings);
 
 settingsModal.addEventListener("click", (event) => {
   if (event.target === settingsModal) closeSettings();
+});
+
+notificationButton.addEventListener("click", () => {
+  if (!isAuthenticated()) return;
+
+  renderNotifications();
+  notificationsModal.classList.remove("hidden");
+});
+
+closeNotificationsButton.addEventListener("click", () => {
+  notificationsModal.classList.add("hidden");
+});
+
+notificationsModal.addEventListener("click", (event) => {
+  if (event.target === notificationsModal) notificationsModal.classList.add("hidden");
 });
 
 settingsTabs.forEach((tab) => {
@@ -1553,11 +1746,13 @@ onAuthStateChanged(auth, async (user) => {
   if (!isAuthenticated()) {
     experiences = [];
     customCategories = [];
+    notifications = [];
     profileSettings = {};
     heroSettings = {};
     applyAuthState();
     applyProfileSettings();
     applyHeroSettings();
+    renderNotifications();
     renderExperiences();
     return;
   }
