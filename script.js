@@ -400,15 +400,14 @@ function applyHeroSettings() {
 function applyAuthState() {
   const authenticated = isAuthenticated();
   const displayName = profileSettings.name || currentUser?.displayName || currentUser?.email?.split("@")[0] || "";
+  const authenticatedButtons = [logoutButton, settingsButton, themeToggleButton, notificationButton, userChip];
 
   workspace.classList.toggle("hidden", !authenticated);
   lockedPanel.classList.toggle("hidden", authenticated);
   loginLink.classList.toggle("hidden", authenticated);
-  logoutButton.classList.toggle("hidden", !authenticated);
-  settingsButton.classList.toggle("hidden", !authenticated);
-  themeToggleButton.classList.toggle("hidden", !authenticated);
-  notificationButton.classList.toggle("hidden", !authenticated);
-  userChip.classList.toggle("hidden", !authenticated);
+  authenticatedButtons.forEach((element) => {
+    element.classList.toggle("hidden", !authenticated);
+  });
   userChip.textContent = authenticated ? displayName : "";
 
   if (!authenticated) {
@@ -1156,7 +1155,7 @@ function renderNotifications() {
   notificationsList.innerHTML = "";
 
   if (notifications.length === 0) {
-    notificationsList.innerHTML = '<p class="settings-note">Nenhuma notificaÃ§Ã£o por enquanto.</p>';
+    notificationsList.innerHTML = '<p class="settings-note">Sem novas mensagens</p>';
     return;
   }
 

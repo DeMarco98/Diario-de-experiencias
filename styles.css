@@ -119,6 +119,7 @@ textarea {
 .theme-toggle-button,
 .notification-button {
   width: 44px;
+  min-width: 44px;
   padding: 0;
   place-items: center;
   position: relative;
