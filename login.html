@@ -32,9 +32,13 @@
             <span>Sobrenome</span>
             <input id="authLastName" type="text" autocomplete="family-name" />
           </label>
+          <label class="field hidden" id="usernameField">
+            <span>Nome de usu&aacute;rio</span>
+            <input id="authUsername" type="text" autocomplete="username" placeholder="Ex: marco98" />
+          </label>
           <label class="field">
-            <span>E-mail</span>
-            <input id="authEmail" type="email" autocomplete="email" required />
+            <span id="loginIdentifierLabel">E-mail</span>
+            <input id="authEmail" type="text" autocomplete="email" required />
           </label>
           <label class="field">
             <span>Senha</span>

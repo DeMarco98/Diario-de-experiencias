@@ -10,6 +10,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 import {
   doc,
+  getDoc,
   serverTimestamp,
   setDoc,
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
@@ -19,11 +20,14 @@ const signupTab = document.querySelector("#signupTab");
 const formTitle = document.querySelector("#formTitle");
 const nameField = document.querySelector("#nameField");
 const lastNameField = document.querySelector("#lastNameField");
+const usernameField = document.querySelector("#usernameField");
 const confirmPasswordField = document.querySelector("#confirmPasswordField");
 const birthDateField = document.querySelector("#birthDateField");
 const authName = document.querySelector("#authName");
 const authLastName = document.querySelector("#authLastName");
+const authUsername = document.querySelector("#authUsername");
 const authEmail = document.querySelector("#authEmail");
+const loginIdentifierLabel = document.querySelector("#loginIdentifierLabel");
 const authPassword = document.querySelector("#authPassword");
 const authConfirmPassword = document.querySelector("#authConfirmPassword");
 const authBirthDate = document.querySelector("#authBirthDate");
@@ -82,19 +86,42 @@ function setMode(nextMode) {
   signupTab.classList.toggle("active", isSignup);
   nameField.classList.toggle("hidden", !isSignup);
   lastNameField.classList.toggle("hidden", !isSignup);
+  usernameField.classList.toggle("hidden", !isSignup);
   confirmPasswordField.classList.toggle("hidden", !isSignup);
   birthDateField.classList.toggle("hidden", !isSignup);
   confirmationBox.classList.add("hidden");
   authName.required = isSignup;
   authLastName.required = isSignup;
+  authUsername.required = isSignup;
   authConfirmPassword.required = isSignup;
   authBirthDate.required = isSignup;
+  loginIdentifierLabel.textContent = isSignup ? "E-mail" : "E-mail ou nome de usuário";
+  authEmail.placeholder = isSignup ? "" : "email@exemplo.com ou usuario";
   formTitle.textContent = isSignup ? "Criar conta" : "Login";
   authSubmitLabel.textContent = isSignup ? "Criar conta" : "Entrar";
   authPassword.autocomplete = isSignup ? "new-password" : "current-password";
   resetPasswordButton.classList.toggle("hidden", isSignup);
   updatePasswordMatchMessage();
   setMessage("");
+}
+
+function normalizeUsername(username) {
+  return username
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9._-]/g, "");
+}
+
+function validateUsername(username) {
+  if (username.length < 3) return "Use um nome de usuário com pelo menos 3 caracteres.";
+  if (username.length > 24) return "Use um nome de usuário com até 24 caracteres.";
+  if (!/^[a-z0-9][a-z0-9._-]*[a-z0-9]$/.test(username)) {
+    return "O usuário deve começar e terminar com letra ou número.";
+  }
+
+  return "";
 }
 
 function syncModeUrl() {
@@ -105,11 +132,13 @@ function syncModeUrl() {
 function getSignupProfile() {
   const firstName = authName.value.trim();
   const lastName = authLastName.value.trim();
+  const username = normalizeUsername(authUsername.value);
 
   return {
     firstName,
     lastName,
     name: `${firstName} ${lastName}`.trim(),
+    username,
     birthDate: authBirthDate.value,
   };
 }
@@ -145,6 +174,11 @@ async function createUserProfile(user, profile = {}) {
     profileData.birthDate = profile.birthDate;
   }
 
+  if (profile.username !== undefined) {
+    userData.username = profile.username;
+    profileData.username = profile.username;
+  }
+
   await setDoc(
     doc(db, "users", user.uid),
     {
@@ -165,8 +199,40 @@ async function createUserProfile(user, profile = {}) {
 
 function showVerificationBox(email) {
   confirmationText.textContent =
-    `Enviamos um e-mail de confirmacao para ${email}. Estamos aguardando a confirmacao para liberar o login. Se o link nao aparecer clicavel, copie e cole o endereco do e-mail no navegador.`;
+    `Enviamos um e-mail de confirmacao para ${email}. Estamos aguardando a confirmacao para liberar o login. Se nao encontrar o e-mail, confira tambem a caixa de spam ou lixo eletronico. Se o link nao aparecer clicavel, copie e cole o endereco do e-mail no navegador.`;
   confirmationBox.classList.remove("hidden");
+}
+
+async function saveUsernameLookup(user, profile) {
+  await setDoc(doc(db, "usernames", profile.username), {
+    uid: user.uid,
+    email: user.email,
+    username: profile.username,
+    name: profile.name,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+async function resolveLoginEmail(identifier) {
+  const value = identifier.trim().toLowerCase();
+
+  if (value.includes("@")) return value;
+
+  const username = normalizeUsername(value);
+  const validationMessage = validateUsername(username);
+
+  if (validationMessage) {
+    throw new Error("Digite um e-mail válido ou um nome de usuário válido.");
+  }
+
+  const usernameSnapshot = await getDoc(doc(db, "usernames", username));
+
+  if (!usernameSnapshot.exists()) {
+    throw new Error("Nome de usuário não encontrado.");
+  }
+
+  return usernameSnapshot.data().email;
 }
 
 function stopVerificationWatcher() {
@@ -258,32 +324,53 @@ document.querySelectorAll(".password-toggle").forEach((button) => {
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
 
-  const email = authEmail.value.trim().toLowerCase();
+  const identifier = authEmail.value.trim().toLowerCase();
   const password = authPassword.value;
   const confirmPassword = authConfirmPassword.value;
   const profile = getSignupProfile();
 
-  if (!email || !password || (mode === "signup" && (!profile.firstName || !profile.lastName || !profile.birthDate))) return;
+  if (!identifier || !password || (mode === "signup" && (!profile.firstName || !profile.lastName || !profile.username || !profile.birthDate))) return;
 
   if (mode === "signup" && !updatePasswordMatchMessage()) {
     authConfirmPassword.focus();
     return;
   }
 
+  if (mode === "signup") {
+    const usernameMessage = validateUsername(profile.username);
+
+    if (usernameMessage) {
+      setMessage(usernameMessage, true);
+      authUsername.focus();
+      return;
+    }
+  }
+
   authSubmit.disabled = true;
 
   try {
+    const email = mode === "signup" ? identifier : await resolveLoginEmail(identifier);
+
     if (mode === "signup") {
+      const usernameSnapshot = await getDoc(doc(db, "usernames", profile.username));
+
+      if (usernameSnapshot.exists()) {
+        setMessage("Este nome de usuário já está em uso.", true);
+        authUsername.focus();
+        return;
+      }
+
       const credential = await createUserWithEmailAndPassword(auth, email, password);
 
       await updateProfile(credential.user, { displayName: profile.name });
       await sendEmailVerification(credential.user, verificationActionSettings);
+      await saveUsernameLookup(credential.user, profile);
       pendingVerificationUser = credential.user;
       startVerificationWatcher(credential.user);
 
       authPassword.value = "";
       authConfirmPassword.value = "";
-      setMessage("Conta criada. Enviamos o e-mail e estamos aguardando a confirmacao.");
+      setMessage("Conta criada. Enviamos o e-mail e estamos aguardando a confirmacao. Confira tambem o spam se nao encontrar.");
       showVerificationBox(email);
 
       createUserProfile(credential.user, profile).catch((profileError) => {
@@ -316,14 +403,16 @@ loginForm.addEventListener("submit", async (event) => {
 });
 
 resetPasswordButton.addEventListener("click", async () => {
-  const email = authEmail.value.trim().toLowerCase();
+  const identifier = authEmail.value.trim().toLowerCase();
 
-  if (!email) {
-    setMessage("Digite seu e-mail para receber a recuperacao de senha.", true);
+  if (!identifier) {
+    setMessage("Digite seu e-mail ou usuário para receber a recuperacao de senha.", true);
     return;
   }
 
   try {
+    const email = await resolveLoginEmail(identifier);
+
     await sendPasswordResetEmail(auth, email);
     setMessage("Enviamos o e-mail de recuperacao de senha.");
   } catch (error) {

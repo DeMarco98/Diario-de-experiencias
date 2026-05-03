@@ -3,7 +3,7 @@ import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-aut
 import { initializeFirestore } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 import { getStorage } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-storage.js";
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyD4B5G5ntAbItIz6s5zfUOuMCWBekBjNOE",
   authDomain: "diario-de-experiencias.firebaseapp.com",
   projectId: "diario-de-experiencias",
@@ -13,11 +13,13 @@ const firebaseConfig = {
   measurementId: "G-HK6FNLESZ7",
 };
 
+export const firebaseProjectId = firebaseConfig.projectId;
+
 const app = initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
 export const db = initializeFirestore(app, {
-  experimentalAutoDetectLongPolling: true,
+  experimentalForceLongPolling: true,
   useFetchStreams: false,
 });
 export const storage = getStorage(app);

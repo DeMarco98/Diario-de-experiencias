@@ -1,4 +1,4 @@
-import { auth, db, storage } from "./firebase-config.js";
+import { auth, db, firebaseProjectId, storage } from "./firebase-config.js";
 import {
   deleteUser,
   onAuthStateChanged,
@@ -409,6 +409,9 @@ function watchUserData() {
     (error) => {
       emptyState.classList.remove("hidden");
       emptyState.textContent = getFriendlyFirebaseError(error);
+      loadUserDataFromRest().catch((restError) => {
+        emptyState.textContent = getFriendlyFirebaseError(restError);
+      });
     },
   );
 
@@ -425,6 +428,9 @@ function watchUserData() {
     (error) => {
       emptyState.classList.remove("hidden");
       emptyState.textContent = getFriendlyFirebaseError(error);
+      loadUserDataFromRest().catch((restError) => {
+        emptyState.textContent = getFriendlyFirebaseError(restError);
+      });
     },
   );
 
@@ -560,6 +566,142 @@ function withTimeout(promise, message = "O Firebase demorou para responder. Tent
   });
 
   return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timeoutId));
+}
+
+function getRestDocumentId(name) {
+  return name.split("/").pop();
+}
+
+function isServerTimestamp(value) {
+  return Boolean(value && typeof value === "object" && value._methodName === "serverTimestamp");
+}
+
+function toFirestoreValue(value) {
+  if (isServerTimestamp(value)) return { timestampValue: new Date().toISOString() };
+  if (value === null || value === undefined) return { nullValue: null };
+  if (Array.isArray(value)) return { arrayValue: { values: value.map(toFirestoreValue) } };
+  if (typeof value === "boolean") return { booleanValue: value };
+  if (typeof value === "number") return Number.isInteger(value) ? { integerValue: String(value) } : { doubleValue: value };
+  if (typeof value === "object") {
+    return {
+      mapValue: {
+        fields: Object.fromEntries(
+          Object.entries(value)
+            .filter(([, item]) => item !== undefined)
+            .map(([key, item]) => [key, toFirestoreValue(item)]),
+        ),
+      },
+    };
+  }
+
+  return { stringValue: String(value) };
+}
+
+function fromFirestoreValue(value) {
+  if (!value) return null;
+  if ("stringValue" in value) return value.stringValue;
+  if ("integerValue" in value) return Number(value.integerValue);
+  if ("doubleValue" in value) return Number(value.doubleValue);
+  if ("booleanValue" in value) return value.booleanValue;
+  if ("timestampValue" in value) return value.timestampValue;
+  if ("arrayValue" in value) return (value.arrayValue.values || []).map(fromFirestoreValue);
+  if ("mapValue" in value) return fromFirestoreFields(value.mapValue.fields || {});
+
+  return null;
+}
+
+function fromFirestoreFields(fields = {}) {
+  return Object.fromEntries(
+    Object.entries(fields).map(([key, value]) => [key, fromFirestoreValue(value)]),
+  );
+}
+
+function toFirestoreFields(data) {
+  return Object.fromEntries(
+    Object.entries(data)
+      .filter(([, value]) => value !== undefined)
+      .map(([key, value]) => [key, toFirestoreValue(value)]),
+  );
+}
+
+async function firestoreRestRequest(path, options = {}) {
+  const token = await currentUser.getIdToken();
+  const response = await fetch(
+    `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}/databases/(default)/documents/${path}`,
+    {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+    },
+  );
+
+  if (!response.ok) {
+    const details = await response.json().catch(() => ({}));
+    throw new Error(details.error?.message || `Erro ${response.status} no Firestore.`);
+  }
+
+  return response.json();
+}
+
+async function createDocumentWithFallback(sdkPromise, collectionPath, data) {
+  try {
+    return await withTimeout(sdkPromise);
+  } catch (sdkError) {
+    console.warn("Firestore SDK falhou, tentando REST.", sdkError);
+    const documentData = await firestoreRestRequest(collectionPath, {
+      method: "POST",
+      body: JSON.stringify({ fields: toFirestoreFields(data) }),
+    });
+
+    return { id: getRestDocumentId(documentData.name) };
+  }
+}
+
+async function updateDocumentWithFallback(sdkPromise, documentPath, data) {
+  try {
+    return await withTimeout(sdkPromise);
+  } catch (sdkError) {
+    console.warn("Firestore SDK falhou, tentando REST.", sdkError);
+    const updateMask = Object.keys(data)
+      .map((key) => `updateMask.fieldPaths=${encodeURIComponent(key)}`)
+      .join("&");
+
+    return firestoreRestRequest(`${documentPath}${updateMask ? `?${updateMask}` : ""}`, {
+      method: "PATCH",
+      body: JSON.stringify({ fields: toFirestoreFields(data) }),
+    });
+  }
+}
+
+async function loadUserDataFromRest() {
+  const [experienceResponse, categoryResponse] = await Promise.all([
+    firestoreRestRequest(`users/${currentUser.uid}/experiences`).catch((error) => {
+      if (error.message.includes("NOT_FOUND")) return { documents: [] };
+      throw error;
+    }),
+    firestoreRestRequest(`users/${currentUser.uid}/customCategories`).catch((error) => {
+      if (error.message.includes("NOT_FOUND")) return { documents: [] };
+      throw error;
+    }),
+  ]);
+
+  experiences = (experienceResponse.documents || [])
+    .map((documentData) => ({
+      id: getRestDocumentId(documentData.name),
+      ...fromFirestoreFields(documentData.fields),
+    }))
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  customCategories = (categoryResponse.documents || []).map((documentData) => ({
+    id: getRestDocumentId(documentData.name),
+    ...fromFirestoreFields(documentData.fields),
+  }));
+
+  populateCategorySelect(categoryInput, getSelectedType(), categoryInput.value);
+  populateCategoryFilter();
+  renderExperiences();
 }
 
 function paintStars(rating) {
@@ -949,12 +1091,17 @@ addCategoryButton.addEventListener("click", async () => {
       populateCategorySelect(categoryInput, type, category);
       setFormMessage("Categoria adicionada. Salvando...");
 
-      const categoryDoc = await withTimeout(addDoc(customCategoriesRef(), {
+      const categoryData = {
         name: category,
         type,
         typeKey,
         createdAt: serverTimestamp(),
-      }));
+      };
+      const categoryDoc = await createDocumentWithFallback(
+        addDoc(customCategoriesRef(), categoryData),
+        `users/${currentUser.uid}/customCategories`,
+        categoryData,
+      );
 
       customCategories = customCategories.map((item) =>
         item.id === temporaryId ? { ...item, id: categoryDoc.id } : item,
@@ -1281,15 +1428,35 @@ form.addEventListener("submit", async (event) => {
     };
 
     if (editingId) {
-      await withTimeout(updateDoc(doc(db, "users", currentUser.uid, "experiences", editingId), experienceData));
+      const editedId = editingId;
+      await updateDocumentWithFallback(
+        updateDoc(doc(db, "users", currentUser.uid, "experiences", editedId), experienceData),
+        `users/${currentUser.uid}/experiences/${editedId}`,
+        experienceData,
+      );
+      experiences = experiences.map((experience) =>
+        experience.id === editedId ? { ...experience, ...experienceData } : experience,
+      );
     } else {
-      await withTimeout(addDoc(experiencesRef(), {
+      const createdExperience = await createDocumentWithFallback(addDoc(experiencesRef(), {
         ...experienceData,
         createdAt: serverTimestamp(),
-      }));
+      }), `users/${currentUser.uid}/experiences`, {
+        ...experienceData,
+        createdAt: serverTimestamp(),
+      });
+      experiences = [
+        {
+          id: createdExperience.id,
+          ...experienceData,
+          createdAt: new Date().toISOString(),
+        },
+        ...experiences,
+      ];
     }
 
     resetFormState();
+    renderExperiences();
     nameInput.focus();
     saved = true;
   } catch (error) {
@@ -1403,6 +1570,9 @@ onAuthStateChanged(auth, async (user) => {
   } catch (error) {
     emptyState.classList.remove("hidden");
     emptyState.textContent = getFriendlyFirebaseError(error);
+    loadUserDataFromRest().catch((restError) => {
+      emptyState.textContent = getFriendlyFirebaseError(restError);
+    });
   }
 });
 
