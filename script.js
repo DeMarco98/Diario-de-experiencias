@@ -13,12 +13,14 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 import {
   getDownloadURL,
@@ -200,6 +202,53 @@ function decodeHtml(text) {
   return parser.value;
 }
 
+function cleanText(text) {
+  if (typeof text !== "string") return text;
+
+  const mojibakeReplacements = [
+    [[0xc3, 0x192, 0xc2, 0xa1], "á"],
+    [[0xc3, 0x192, 0xc2, 0xa0], "à"],
+    [[0xc3, 0x192, 0xc2, 0xa2], "â"],
+    [[0xc3, 0x192, 0xc2, 0xa3], "ã"],
+    [[0xc3, 0x192, 0xc2, 0xa9], "é"],
+    [[0xc3, 0x192, 0xc2, 0xaa], "ê"],
+    [[0xc3, 0x192, 0xc2, 0xad], "í"],
+    [[0xc3, 0x192, 0xc2, 0xb3], "ó"],
+    [[0xc3, 0x192, 0xc2, 0xb4], "ô"],
+    [[0xc3, 0x192, 0xc2, 0xb5], "õ"],
+    [[0xc3, 0x192, 0xc2, 0xba], "ú"],
+    [[0xc3, 0x192, 0xc2, 0xa7], "ç"],
+    [[0xc3, 0xa1], "á"],
+    [[0xc3, 0xa0], "à"],
+    [[0xc3, 0xa2], "â"],
+    [[0xc3, 0xa3], "ã"],
+    [[0xc3, 0xa9], "é"],
+    [[0xc3, 0xaa], "ê"],
+    [[0xc3, 0xad], "í"],
+    [[0xc3, 0xb3], "ó"],
+    [[0xc3, 0xb4], "ô"],
+    [[0xc3, 0xb5], "õ"],
+    [[0xc3, 0xba], "ú"],
+    [[0xc3, 0xa7], "ç"],
+  ];
+
+  return mojibakeReplacements.reduce(
+    (currentText, [codes, replacement]) => currentText.replaceAll(String.fromCharCode(...codes), replacement),
+    text,
+  );
+}
+
+function cleanData(value) {
+  if (Array.isArray(value)) return value.map(cleanData);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, cleanData(item)]),
+    );
+  }
+
+  return cleanText(value);
+}
+
 function getTypeKey(type) {
   return type
     .normalize("NFD")
@@ -218,6 +267,30 @@ function normalizeUsername(username) {
 
 function getCurrentUsername() {
   return profileSettings.username || currentUser?.email?.split("@")[0] || "usuario";
+}
+
+function getCurrentSharePerson(status = "owner") {
+  return {
+    uid: currentUser.uid,
+    username: getCurrentUsername(),
+    name: profileSettings.name || currentUser.displayName || currentUser.email,
+    status,
+  };
+}
+
+function mergeSharedPeople(people = [], nextPerson) {
+  const byUid = new Map();
+
+  people.forEach((person) => {
+    if (person?.uid) byUid.set(person.uid, person);
+  });
+  byUid.set(nextPerson.uid, { ...byUid.get(nextPerson.uid), ...nextPerson });
+
+  return [...byUid.values()];
+}
+
+function getSharedGroupId(experience) {
+  return experience.sharedGroupId || `${currentUser.uid}_${experience.id}`;
 }
 
 function getTypeClass(type) {
@@ -427,7 +500,7 @@ function watchUserData() {
     (snapshot) => {
       experiences = snapshot.docs.map((docSnapshot) => ({
         id: docSnapshot.id,
-        ...docSnapshot.data(),
+        ...cleanData(docSnapshot.data()),
       }));
       renderExperiences();
     },
@@ -445,7 +518,7 @@ function watchUserData() {
     (snapshot) => {
       customCategories = snapshot.docs.map((docSnapshot) => ({
         id: docSnapshot.id,
-        ...docSnapshot.data(),
+        ...cleanData(docSnapshot.data()),
       }));
       populateCategorySelect(categoryInput, getSelectedType(), categoryInput.value);
       populateCategoryFilter();
@@ -460,12 +533,12 @@ function watchUserData() {
   );
 
   unsubscribeProfile = onSnapshot(settingsDocRef("profile"), (snapshot) => {
-    profileSettings = snapshot.exists() ? snapshot.data() : {};
+    profileSettings = snapshot.exists() ? cleanData(snapshot.data()) : {};
     applyProfileSettings();
   });
 
   unsubscribeHero = onSnapshot(settingsDocRef("hero"), (snapshot) => {
-    heroSettings = snapshot.exists() ? snapshot.data() : {};
+    heroSettings = snapshot.exists() ? cleanData(snapshot.data()) : {};
     applyHeroSettings();
   });
 
@@ -474,7 +547,7 @@ function watchUserData() {
     (snapshot) => {
       notifications = snapshot.docs.map((docSnapshot) => ({
         id: docSnapshot.id,
-        ...docSnapshot.data(),
+        ...cleanData(docSnapshot.data()),
       }));
       renderNotifications();
     },
@@ -730,12 +803,12 @@ async function loadUserDataFromRest() {
   experiences = (experienceResponse.documents || [])
     .map((documentData) => ({
       id: getRestDocumentId(documentData.name),
-      ...fromFirestoreFields(documentData.fields),
+      ...cleanData(fromFirestoreFields(documentData.fields)),
     }))
     .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
   customCategories = (categoryResponse.documents || []).map((documentData) => ({
     id: getRestDocumentId(documentData.name),
-    ...fromFirestoreFields(documentData.fields),
+    ...cleanData(fromFirestoreFields(documentData.fields)),
   }));
 
   populateCategorySelect(categoryInput, getSelectedType(), categoryInput.value);
@@ -1007,6 +1080,7 @@ function renderExperiences() {
     const cardActions = document.createElement("div");
     const editButton = document.createElement("button");
     const shareButton = document.createElement("button");
+    const sharedBox = document.createElement("div");
     const notes = document.createElement("p");
     const photos = document.createElement("div");
 
@@ -1046,7 +1120,7 @@ function renderExperiences() {
 
     shareButton.className = "edit-button share-button";
     shareButton.type = "button";
-    shareButton.title = "Compartilhar experiÃªncia";
+    shareButton.title = "Compartilhar experiência";
     shareButton.setAttribute("aria-label", `Compartilhar ${experience.name}`);
     shareButton.innerHTML = '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M18 8a3 3 0 1 0-2.8-4"/><path d="M6 14a3 3 0 1 0 2.8 4"/><path d="m8.6 15.4 6.8-3.8"/><path d="m8.6 8.6 6.8 3.8"/></svg>';
     shareButton.addEventListener("click", () => shareExperience(experience));
@@ -1060,6 +1134,18 @@ function renderExperiences() {
       notes.className = "experience-notes";
       notes.textContent = experience.notes;
       content.appendChild(notes);
+    }
+
+    if (experience.sharedWith?.length) {
+      const sharedNames = experience.sharedWith
+        .filter((person) => person.uid !== currentUser.uid)
+        .map((person) => `@${person.username || person.name || "usuario"}${person.status === "pending" ? " (pendente)" : ""}`);
+
+      if (sharedNames.length) {
+        sharedBox.className = "shared-box";
+        sharedBox.innerHTML = `<strong>Compartilhado com</strong><span>${sharedNames.join(", ")}</span>`;
+        content.appendChild(sharedBox);
+      }
     }
 
     item.append(deleteSelect, content, cardActions);
@@ -1093,11 +1179,11 @@ function renderExperiences() {
 async function findUserByUsername(username) {
   const normalizedUsername = normalizeUsername(username);
 
-  if (!normalizedUsername) throw new Error("Digite um nome de usuÃ¡rio.");
+  if (!normalizedUsername) throw new Error("Digite um nome de usuário.");
 
   const usernameSnapshot = await getDoc(doc(db, "usernames", normalizedUsername));
 
-  if (!usernameSnapshot.exists()) throw new Error("UsuÃ¡rio nÃ£o encontrado.");
+  if (!usernameSnapshot.exists()) throw new Error("Usuário não encontrado.");
 
   return usernameSnapshot.data();
 }
@@ -1105,7 +1191,7 @@ async function findUserByUsername(username) {
 async function shareExperience(experience) {
   if (!isAuthenticated()) return;
 
-  const username = window.prompt("Digite o nome de usuÃ¡rio para compartilhar:");
+  const username = window.prompt("Digite o nome de usuário para compartilhar:");
 
   if (!username) return;
 
@@ -1113,9 +1199,39 @@ async function shareExperience(experience) {
     const targetUser = await findUserByUsername(username);
 
     if (targetUser.uid === currentUser.uid) {
-      setFormMessage("VocÃª nÃ£o precisa compartilhar com vocÃª mesmo.", true);
+      setFormMessage("Você não precisa compartilhar com você mesmo.", true);
       return;
     }
+
+    const sharedGroupId = getSharedGroupId(experience);
+    const ownerPerson = getCurrentSharePerson("owner");
+    const targetPerson = {
+      uid: targetUser.uid,
+      username: targetUser.username,
+      name: targetUser.name || targetUser.username,
+      status: "pending",
+    };
+    const sharedWith = mergeSharedPeople(
+      mergeSharedPeople(experience.sharedWith || [], ownerPerson),
+      targetPerson,
+    );
+    const sharedParticipantUids = [...new Set(sharedWith.map((person) => person.uid))];
+
+    await updateDoc(doc(db, "users", currentUser.uid, "experiences", experience.id), {
+      shared: true,
+      sharedGroupId,
+      sharedOwnerUid: experience.sharedOwnerUid || currentUser.uid,
+      sharedParticipantUids,
+      sharedWith,
+      updatedAt: serverTimestamp(),
+    });
+
+    experiences = experiences.map((item) =>
+      item.id === experience.id
+        ? { ...item, shared: true, sharedGroupId, sharedOwnerUid: experience.sharedOwnerUid || currentUser.uid, sharedParticipantUids, sharedWith }
+        : item,
+    );
+    renderExperiences();
 
     await addDoc(notificationsRef(targetUser.uid), {
       type: "experience-share",
@@ -1125,6 +1241,10 @@ async function shareExperience(experience) {
       fromName: profileSettings.name || currentUser.displayName || currentUser.email,
       toUid: targetUser.uid,
       experienceId: experience.id,
+      sharedGroupId,
+      sharedOwnerUid: experience.sharedOwnerUid || currentUser.uid,
+      sharedParticipantUids,
+      sharedWith,
       experience: {
         name: experience.name,
         category: experience.category || "",
@@ -1134,6 +1254,11 @@ async function shareExperience(experience) {
         type: experience.type,
         typeKey: experience.typeKey || getTypeKey(experience.type),
         rating: experience.rating,
+        shared: true,
+        sharedGroupId,
+        sharedOwnerUid: experience.sharedOwnerUid || currentUser.uid,
+        sharedParticipantUids,
+        sharedWith,
         sharedFromUid: currentUser.uid,
         sharedFromUsername: getCurrentUsername(),
       },
@@ -1166,11 +1291,11 @@ function renderNotifications() {
     const actions = document.createElement("div");
 
     item.className = "notification-item";
-    title.textContent = notification.status === "pending" ? "Convite de experiÃªncia" : "Convite respondido";
+    title.textContent = notification.status === "pending" ? "Convite de experiência" : "Convite respondido";
     description.textContent =
       notification.status === "pending"
-        ? `${notification.fromName || notification.fromUsername} quer compartilhar "${notification.experience?.name || "uma experiÃªncia"}" com vocÃª.`
-        : `VocÃª ${notification.status === "accepted" ? "aceitou" : "recusou"} "${notification.experience?.name || "uma experiÃªncia"}".`;
+        ? `${notification.fromName || notification.fromUsername} quer compartilhar "${notification.experience?.name || "uma experiência"}" com você.`
+        : `Você ${notification.status === "accepted" ? "aceitou" : "recusou"} "${notification.experience?.name || "uma experiência"}".`;
 
     item.append(title, description);
 
@@ -1202,13 +1327,34 @@ async function respondToShare(notification, accepted) {
 
   try {
     if (accepted) {
+      const acceptedPerson = {
+        uid: currentUser.uid,
+        username: getCurrentUsername(),
+        name: profileSettings.name || currentUser.displayName || currentUser.email,
+        status: "accepted",
+      };
+      const sharedWith = mergeSharedPeople(notification.sharedWith || notification.experience?.sharedWith || [], acceptedPerson);
+      const sharedParticipantUids = [...new Set([...(notification.sharedParticipantUids || []), currentUser.uid])];
+
       await addDoc(experiencesRef(), {
         ...notification.experience,
         shared: true,
+        sharedGroupId: notification.sharedGroupId,
+        sharedOwnerUid: notification.sharedOwnerUid || notification.fromUid,
+        sharedParticipantUids,
+        sharedWith,
         sharedAcceptedAt: serverTimestamp(),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+
+      if (notification.fromUid && notification.experienceId) {
+        await updateDoc(doc(db, "users", notification.fromUid, "experiences", notification.experienceId), {
+          sharedParticipantUids,
+          sharedWith,
+          updatedAt: serverTimestamp(),
+        });
+      }
     }
 
     await updateDoc(doc(db, "users", currentUser.uid, "notifications", notification.id), {
@@ -1218,6 +1364,49 @@ async function respondToShare(notification, accepted) {
   } catch (error) {
     notificationsList.innerHTML = `<p class="settings-message error">${getFriendlyFirebaseError(error)}</p>`;
   }
+}
+
+async function findSharedExperienceCopies(experience) {
+  if (!experience.sharedGroupId || !experience.sharedParticipantUids?.length) return [];
+
+  const participantUids = experience.sharedParticipantUids.filter((uid) => uid && uid !== currentUser.uid);
+  const copySnapshots = await Promise.all(
+    participantUids.map(async (uid) => {
+      const snapshot = await getDocs(
+        query(
+          collection(db, "users", uid, "experiences"),
+          where("sharedGroupId", "==", experience.sharedGroupId),
+        ),
+      );
+
+      return snapshot.docs.map((docSnapshot) => ({
+        uid,
+        id: docSnapshot.id,
+      }));
+    }),
+  );
+
+  return copySnapshots.flat();
+}
+
+async function syncSharedExperience(experience, experienceData) {
+  if (!experience.sharedGroupId || !experience.sharedParticipantUids?.length) return;
+
+  const copies = await findSharedExperienceCopies(experience);
+
+  await Promise.all(
+    copies.map((copy) =>
+      updateDoc(doc(db, "users", copy.uid, "experiences", copy.id), {
+        ...experienceData,
+        shared: true,
+        sharedGroupId: experience.sharedGroupId,
+        sharedOwnerUid: experience.sharedOwnerUid || currentUser.uid,
+        sharedParticipantUids: experience.sharedParticipantUids,
+        sharedWith: experience.sharedWith || [],
+        updatedAt: serverTimestamp(),
+      }),
+    ),
+  );
 }
 
 starButtons.forEach((button) => {
@@ -1621,11 +1810,15 @@ form.addEventListener("submit", async (event) => {
 
     if (editingId) {
       const editedId = editingId;
+      const originalExperience = experiences.find((experience) => experience.id === editedId);
       await updateDocumentWithFallback(
         updateDoc(doc(db, "users", currentUser.uid, "experiences", editedId), experienceData),
         `users/${currentUser.uid}/experiences/${editedId}`,
         experienceData,
       );
+      if (originalExperience?.sharedGroupId) {
+        await syncSharedExperience(originalExperience, experienceData);
+      }
       experiences = experiences.map((experience) =>
         experience.id === editedId ? { ...experience, ...experienceData } : experience,
       );

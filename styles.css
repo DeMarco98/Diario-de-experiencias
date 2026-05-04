@@ -893,6 +893,23 @@ svg {
   overflow-wrap: anywhere;
 }
 
+.shared-box {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--type-line);
+  border-radius: 8px;
+  color: var(--type-dark);
+  background: var(--type-soft);
+  font-size: 0.88rem;
+}
+
+.shared-box strong {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
 .card-photos {
   display: grid;
   grid-template-columns: repeat(4, minmax(64px, 1fr));
