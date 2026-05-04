@@ -1394,20 +1394,25 @@ async function syncSharedExperience(experience, experienceData) {
   if (!experience.sharedGroupId || !experience.sharedParticipantUids?.length) return;
 
   const copies = await findSharedExperienceCopies(experience);
+  const sharedUpdate = {
+    ...experienceData,
+    shared: true,
+    sharedGroupId: experience.sharedGroupId,
+    sharedOwnerUid: experience.sharedOwnerUid || currentUser.uid,
+    sharedParticipantUids: experience.sharedParticipantUids,
+    sharedWith: experience.sharedWith || [],
+    updatedAt: serverTimestamp(),
+  };
 
   await Promise.all(
     copies.map((copy) =>
-      updateDoc(doc(db, "users", copy.uid, "experiences", copy.id), {
-        ...experienceData,
-        shared: true,
-        sharedGroupId: experience.sharedGroupId,
-        sharedOwnerUid: experience.sharedOwnerUid || currentUser.uid,
-        sharedParticipantUids: experience.sharedParticipantUids,
-        sharedWith: experience.sharedWith || [],
-        updatedAt: serverTimestamp(),
-      }),
+      updateDoc(doc(db, "users", copy.uid, "experiences", copy.id), sharedUpdate),
     ),
   );
+
+  if (copies.length === 0) {
+    console.warn("Nenhuma cópia compartilhada encontrada para sincronizar.", experience.sharedGroupId);
+  }
 }
 
 starButtons.forEach((button) => {
@@ -1818,10 +1823,23 @@ form.addEventListener("submit", async (event) => {
         experienceData,
       );
       if (originalExperience?.sharedGroupId) {
-        await syncSharedExperience(originalExperience, experienceData);
+        await syncSharedExperience(
+          {
+            ...originalExperience,
+            sharedParticipantUids: originalExperience.sharedParticipantUids || [currentUser.uid],
+            sharedWith: originalExperience.sharedWith || [getCurrentSharePerson("accepted")],
+          },
+          experienceData,
+        );
       }
       experiences = experiences.map((experience) =>
-        experience.id === editedId ? { ...experience, ...experienceData } : experience,
+        experience.id === editedId
+          ? {
+              ...experience,
+              ...experienceData,
+              photos: experienceData.photos,
+            }
+          : experience,
       );
     } else {
       const createdExperience = await createDocumentWithFallback(addDoc(experiencesRef(), {
