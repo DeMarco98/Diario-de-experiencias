@@ -1376,6 +1376,7 @@ async function findSharedExperienceCopies(experience) {
         query(
           collection(db, "users", uid, "experiences"),
           where("sharedGroupId", "==", experience.sharedGroupId),
+          where("sharedParticipantUids", "array-contains", currentUser.uid),
         ),
       );
 
